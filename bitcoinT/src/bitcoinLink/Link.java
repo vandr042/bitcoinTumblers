@@ -33,19 +33,16 @@ public class Link {
 		StoredBlock stored_block = chain.getChainHead();
 		HashMap<Address,LinkedList<Address>> cluster_map = new HashMap();
 		
-<<<<<<< HEAD
 		File file1 = new File("clustersParse.txt");
 		File file2 = new File("clusters.txt");
 		PrintWriter hwriter = new PrintWriter("clusters.txt");
 		PrintWriter pwriter = new PrintWriter("clustersParse.txt");
-		
-=======
+	
 		File file1 = new File("clustersParsable.txt");
 		File file2 = new File("clusters.txt");
 		PrintWriter hwriter = new PrintWriter("clusters.txt");
 		PrintWriter pwriter = new PrintWriter("clustersParsable.txt");
 
->>>>>>> 906c82cd634f7dc779f9e8ad9cfc6e3b482b9fd0
 		/* COUNTERS */
 		int mergeCount = 0;
 		int largestCluster = 0;
@@ -54,11 +51,7 @@ public class Link {
 		
 		
 		/* Increase counter to scale blocks fetched */
-<<<<<<< HEAD
-		while (stored_block != null) {
-=======
 		while(stored_block != null) {
->>>>>>> 906c82cd634f7dc779f9e8ad9cfc6e3b482b9fd0
 			Block tBlock = dlPeer.getBlock(stored_block.getHeader().getHash()).get();
 			List<Transaction> tx_list = tBlock.getTransactions();
 			System.out.println("has: " + tx_list.size() + "transactions"); 
