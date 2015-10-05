@@ -33,11 +33,19 @@ public class Link {
 		StoredBlock stored_block = chain.getChainHead();
 		HashMap<Address,LinkedList<Address>> cluster_map = new HashMap();
 		
+<<<<<<< HEAD
+		File file1 = new File("clustersParse.txt");
+		File file2 = new File("clusters.txt");
+		PrintWriter hwriter = new PrintWriter("clusters.txt");
+		PrintWriter pwriter = new PrintWriter("clustersParse.txt");
+		
+=======
 		File file1 = new File("clustersParsable.txt");
 		File file2 = new File("clusters.txt");
 		PrintWriter hwriter = new PrintWriter("clusters.txt");
 		PrintWriter pwriter = new PrintWriter("clustersParsable.txt");
 
+>>>>>>> 906c82cd634f7dc779f9e8ad9cfc6e3b482b9fd0
 		/* COUNTERS */
 		int mergeCount = 0;
 		int largestCluster = 0;
@@ -46,7 +54,11 @@ public class Link {
 		
 		
 		/* Increase counter to scale blocks fetched */
+<<<<<<< HEAD
+		while (stored_block != null) {
+=======
 		while(stored_block != null) {
+>>>>>>> 906c82cd634f7dc779f9e8ad9cfc6e3b482b9fd0
 			Block tBlock = dlPeer.getBlock(stored_block.getHeader().getHash()).get();
 			List<Transaction> tx_list = tBlock.getTransactions();
 			System.out.println("has: " + tx_list.size() + "transactions"); 
@@ -153,12 +165,12 @@ public class Link {
 			hwriter.println(vArray[i]);
 			hwriter.println("************************************");
 		}
-		System.out.println("keys: " + keyArray.length);
-		System.out.println("Num Clusters: " + vArray.length);
-		System.out.println("Total Tx: " + totalTx);
-		System.out.println("%Tx used: " + (totalTx-eCount)/totalTx);
-		System.out.println("Clusters merged: " + mergeCount);
-		System.out.println("Exceptions: " + eCount);
+		hwriter.println("Largest cluster :" + largestCluster);
+		hwriter.println("Num Clusters: " + vArray.length);
+		hwriter.println("Total Tx: " + totalTx);
+		hwriter.println("%Tx used: " + (totalTx-eCount)/totalTx);
+		hwriter.println("Clusters merged: " + mergeCount);
+		hwriter.println("Exceptions: " + eCount);
 	}//end main
 
 }
