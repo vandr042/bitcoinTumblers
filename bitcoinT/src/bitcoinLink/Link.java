@@ -38,7 +38,7 @@ public class Link {
 		PrintWriter hwriter = new PrintWriter("clusters.txt");
 		PrintWriter pwriter = new PrintWriter("clustersParse.txt");
 
-		/* COUNTERS */
+		/* STATS */
 		int mergeCount = 0;
 		int largestCluster = 0;
 		double eCount = 0.0;
@@ -47,7 +47,7 @@ public class Link {
 		
 		/* Increase counter to scale blocks fetched */
 		int counter = 0;
-		while(counter <= 26280 && stored_block != null) {
+		while(counter <= 3 && stored_block != null) {
 			Block tBlock = dlPeer.getBlock(stored_block.getHeader().getHash()).get();
 			List<Transaction> tx_list = tBlock.getTransactions();
 			System.out.println("has: " + tx_list.size() + "transactions"); 
@@ -140,6 +140,7 @@ public class Link {
 				}
 			}
 			stored_block = stored_block.getPrev(kit.store());
+			counter++;
 		}//end counter loop 
 		Set<Address> keyset = cluster_map.keySet();
 		Collection<LinkedList<Address>> values = cluster_map.values();
