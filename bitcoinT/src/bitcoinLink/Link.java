@@ -47,7 +47,7 @@ public class Link {
 		
 		/* Increase counter to scale blocks fetched */
 		int counter = 0;
-		while(counter <= 3 && stored_block != null) {
+		while(counter <= 26280 && stored_block != null) {
 			Block tBlock = dlPeer.getBlock(stored_block.getHeader().getHash()).get();
 			List<Transaction> tx_list = tBlock.getTransactions();
 			System.out.println("has: " + tx_list.size() + "transactions"); 
