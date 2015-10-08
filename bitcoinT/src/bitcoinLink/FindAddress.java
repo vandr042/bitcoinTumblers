@@ -104,7 +104,7 @@ public class FindAddress {
 	}
 	
 	public static void main(String[] args) throws BlockStoreException, FileNotFoundException, InterruptedException, ExecutionException, AddressFormatException {
-		Address addr = new Address(params, "18PGNHvYzpPGz29G6mbZsPbuC47Ykzega");
+		Address addr = new Address(params, args[0]);
 		getEm(addr);
 	}
 
