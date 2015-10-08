@@ -37,11 +37,6 @@ public class Link {
 		File file2 = new File("clusters.txt");
 		PrintWriter hwriter = new PrintWriter("clusters.txt");
 		PrintWriter pwriter = new PrintWriter("clustersParse.txt");
-	
-		File file1 = new File("clustersParsable.txt");
-		File file2 = new File("clusters.txt");
-		PrintWriter hwriter = new PrintWriter("clusters.txt");
-		PrintWriter pwriter = new PrintWriter("clustersParsable.txt");
 
 		/* COUNTERS */
 		int mergeCount = 0;
@@ -51,7 +46,8 @@ public class Link {
 		
 		
 		/* Increase counter to scale blocks fetched */
-		while(stored_block != null) {
+		int counter = 0;
+		while(counter <= 26280 && stored_block != null) {
 			Block tBlock = dlPeer.getBlock(stored_block.getHeader().getHash()).get();
 			List<Transaction> tx_list = tBlock.getTransactions();
 			System.out.println("has: " + tx_list.size() + "transactions"); 
@@ -149,14 +145,8 @@ public class Link {
 		Collection<LinkedList<Address>> values = cluster_map.values();
 		Address[] keyArray = keyset.toArray(new Address[keyset.size()]);
 		Object[] vArray = values.toArray();
-		hwriter.println("*******************CLUSTERS**************************");
 		for (int i = 0; i< keyArray.length; i ++){
 			pwriter.println(vArray[i]);
-		}
-		for (int i = 0; i< keyArray.length; i ++){
-			hwriter.println(keyArray[i]);
-			hwriter.println(vArray[i]);
-			hwriter.println("************************************");
 		}
 		hwriter.println("Largest cluster :" + largestCluster);
 		hwriter.println("Num Clusters: " + vArray.length);
