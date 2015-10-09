@@ -155,6 +155,8 @@ public class Link {
 		hwriter.println("%Tx used: " + (totalTx-eCount)/totalTx);
 		hwriter.println("Clusters merged: " + mergeCount);
 		hwriter.println("Exceptions: " + eCount);
+		hwriter.close();
+		pwriter.close();
 	}//end main
 
 }
