@@ -22,7 +22,7 @@ public class FindAddress {
 	 * @throws InterruptedException 
 	 */
 	private static NetworkParameters params = MainNetParams.get();
-	private static List<Transaction> getEm(Address addr) throws BlockStoreException, FileNotFoundException, InterruptedException, ExecutionException{
+	private static LinkedList<Transaction> getEm(Address addr) throws BlockStoreException, FileNotFoundException, InterruptedException, ExecutionException{
 		
 		WalletAppKit kit = new WalletAppKit(params, new File("foo"), "test");
 		kit.startAsync();
@@ -32,11 +32,6 @@ public class FindAddress {
 		BlockChain chain = kit.chain();
 		StoredBlock stored_block = chain.getChainHead();
 		
-		/*File file1 = new File("clustersParse.txt");
-		File file2 = new File("clusters.txt");
-		PrintWriter hwriter = new PrintWriter("clusters.txt");
-		PrintWriter pwriter = new PrintWriter("clustersParse.txt");*/
-
 		/* STATS */
 		double eCount = 0.0;
 		double totalTx = 0.0;
@@ -46,7 +41,7 @@ public class FindAddress {
 		
 		/* Increase counter to scale blocks fetched */
 		int counter = 0;
-		while(counter <= 50 && stored_block != null) {
+		while(counter <= 2 && stored_block != null) {
 			Block tBlock = dlPeer.getBlock(stored_block.getHeader().getHash()).get();
 			List<Transaction> tx_list = tBlock.getTransactions(); 
 			totalTx += tx_list.size();
@@ -78,12 +73,19 @@ public class FindAddress {
 					/* if address wasn't an input check if an output */
 					if (addrFound == false){
 						for(TransactionOutput tx_o : tx_olist){
-							
+							System.out.println(tx_o.getValue());
 							Address o_addr = tx_o.getAddressFromP2PKHScript(params);
 							if(o_addr != null && o_addr.toString().equals(addr.toString()) == true){ //if it appears then add to list
 								tx_appears.add(tx);
 								addrAppears++;
 								break;
+							}else{
+								o_addr = tx_o.getAddressFromP2SH(params);
+								if(o_addr != null && o_addr.toString().equals(addr.toString()) == true){
+									tx_appears.add(tx);
+									addrAppears++;
+									break;
+								}
 							}
 						}
 					}
@@ -105,7 +107,31 @@ public class FindAddress {
 	
 	public static void main(String[] args) throws BlockStoreException, FileNotFoundException, InterruptedException, ExecutionException, AddressFormatException {
 		Address addr = new Address(params, args[0]);
-		getEm(addr);
+		LinkedList<Transaction> tx_list = getEm(addr);
+		File file1 = new File(args[0] + ".txt");
+		PrintWriter pwriter = new PrintWriter(file1);
+		for (Transaction tx : tx_list){
+			//inputs
+			for (TransactionInput tx_i:(tx.getInputs())){
+				pwriter.print(tx_i.getFromAddress() + "|");
+			}
+			pwriter.println();
+			//outputs
+			for (TransactionOutput tx_o: tx.getOutputs()){
+				Address o_addr = tx_o.getAddressFromP2PKHScript(params);
+				if (o_addr == null){
+					o_addr = tx_o.getAddressFromP2SH(params);
+				
+				}
+				pwriter.print(o_addr + "|");
+				pwriter.println();
+			}
+			pwriter.println();
+			/* NEED TO PRINT TRANSACTION VALUE HERE */
+			pwriter.close();
+		
+			
+		}
 	}
 
 }

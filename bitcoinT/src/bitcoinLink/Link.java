@@ -47,12 +47,13 @@ public class Link {
 		
 		/* Increase counter to scale blocks fetched */
 		int counter = 0;
-		while(counter <= 26280 && stored_block != null) {
+		while(counter <= 5 && stored_block != null) {
 			Block tBlock = dlPeer.getBlock(stored_block.getHeader().getHash()).get();
 			List<Transaction> tx_list = tBlock.getTransactions();
 			System.out.println("has: " + tx_list.size() + "transactions"); 
 			totalTx += tx_list.size();
 			for (Transaction tx : tx_list) {
+			
 				List<TransactionInput> tx_ilist = tx.getInputs();
 				if (tx_ilist.size() > 1) {
 					
