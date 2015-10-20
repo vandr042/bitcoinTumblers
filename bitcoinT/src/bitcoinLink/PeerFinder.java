@@ -16,7 +16,7 @@ import java.util.concurrent.ExecutionException;
 public class PeerFinder implements Runnable{
 	
 	static NetworkParameters params = MainNetParams.get();
-	static HashMap <InetAddress, Long> peers = new HashMap();
+	static HashMap<Peer, HashMap <InetAddress, Long>> peers = new HashMap<Peer, HashMap<InetAddress, Long>>();
 	static WalletAppKit kit = new WalletAppKit(params, new File("foo"), "test");
 	static PeerGroup pGroup;
 	static List<Peer> pl;
@@ -38,13 +38,16 @@ public class PeerFinder implements Runnable{
 		
 	}
 	
-	/* this is where the helper threads get created */
+	/* this is wherwriter.println("Peer" + inetAddr + ": " + addr.getTime());e the helper threads get created */
 	public void run() {
 		
 		for (Peer peer: pl){
 			try {
-				PeerHelper newHelper = new PeerHelper(peer, peers);
+				HashMap<InetAddress, Long> tempMap = new HashMap<InetAddress, Long>();
+				peers.put(peer, tempMap);
+				PeerHelper newHelper = new PeerHelper(peer, tempMap, writer);
 				Thread pthread = new Thread(newHelper);
+				pthread.setDaemon(true);
 				pthread.start();
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
@@ -52,8 +55,7 @@ public class PeerFinder implements Runnable{
 			
 		}
 		try {
-			Thread.sleep(20000);
-			tthread.notify();
+			Thread.sleep(180000);
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
@@ -63,11 +65,8 @@ public class PeerFinder implements Runnable{
 		PeerFinder finder = new PeerFinder();
 		finder.findPeers();
 		tthread = new Thread(finder);
-		tthread.setDaemon(true);
+		tthread.setDaemon(false);
 		tthread.start();
-		finder.wait();
-		System.out.println(peers);
-		
 	}
 
 }

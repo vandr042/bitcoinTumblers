@@ -18,31 +18,34 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 
 public class PeerHelper implements Runnable {
-	
-	static HashMap<InetAddress, Long> addrMap;
-	static Peer aPeer;
+
+	HashMap<InetAddress, Long> addrMap;
+	Peer aPeer;
 	File file1 = new File("connections.txt");
-	static PrintStream writer;
+	PrintStream writer = null;
 	static PrintWriter writer1;
 	static AddressMessage message;
-	
-	
-	public PeerHelper(Peer peer, HashMap hm) throws FileNotFoundException{
+
+	public PeerHelper(Peer peer, HashMap<InetAddress, Long> hm, PrintStream outWriter) throws FileNotFoundException {
 		addrMap = hm;
 		aPeer = peer;
-		writer = new PrintStream("connections.txt");
+		this.writer = outWriter;
 	}
-	
-	
+
 	public static void main(String[] args) throws InterruptedException, ExecutionException {
 	}
 
 	@Override
 	public void run() {
 		
-		/*keep asking peers for addresses until main thread in peerFinder terminates */
-		while(true){
-		/* not sure what to do with an exception */
+		System.out.println("starting on " + this.aPeer);
+
+		/*
+		 * keep asking peers for addresses until main thread in peerFinder
+		 * terminates
+		 */
+		while (true) {
+			/* not sure what to do with an exception */
 			try {
 				message = aPeer.getAddr().get();
 			} catch (InterruptedException e) {
@@ -50,33 +53,40 @@ public class PeerHelper implements Runnable {
 			} catch (ExecutionException e) {
 				e.printStackTrace();
 			}
-			
-			/* get inetAdress and check if in map, if not add else update if time updated */
+
+			/*
+			 * get inetAdress and check if in map, if not add else update if
+			 * time updated
+			 */
 			List<PeerAddress> addresses = message.getAddresses();
-			for (PeerAddress addr: addresses){
+			for (PeerAddress addr : addresses) {
 				InetAddress inetAddr = addr.getAddr();
-				writer.println(addr);
-				writer.println("Trying to get inetADDR: " + addrMap.get(inetAddr));
-				if (addrMap.get(inetAddr) == null){
+				if (!addrMap.containsKey(inetAddr)) {
 					addrMap.put(inetAddr, addr.getTime());
-					writer.println("Peer" + inetAddr + ": " + addr.getTime());
-					writer.println("Peer" + inetAddr + ": " + addr.getTime());
-				}else{
+					synchronized (writer) {
+						writer.println("NEW Peer" + inetAddr + ": " + addr.getTime());
+					}
+				} else {
 					Long time = addr.getTime();
-					if (time > addrMap.get(inetAddr)){
-						writer.println("Peer" + inetAddr + ": " + time);
+					if (time > addrMap.get(inetAddr)) {
+						synchronized (writer) {
+							writer.println("UPDATED Peer" + inetAddr + ": " + time);
+						}
 						System.out.println(time);
 					}
 				}
 			}
 			try {
-				Thread.sleep(30000);
+				Thread.sleep(10000);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
-			writer.close();
+
+			synchronized (writer) {
+				writer.flush();
+			}
 		}
-	
+
 	}
 
 }
