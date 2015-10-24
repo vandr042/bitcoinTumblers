@@ -1,92 +1,124 @@
 package bitcoinLink;
 
-import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.PrintStream;
-import java.io.PrintWriter;
 import java.util.*;
 import org.bitcoinj.core.*;
-import org.bitcoinj.kits.WalletAppKit;
-import org.bitcoinj.params.MainNetParams;
-import org.bitcoinj.store.*;
-import org.bitcoinj.utils.BriefLogFormatter;
-
-import java.io.File;
-import java.io.FileNotFoundException;
 import java.net.InetAddress;
-import java.util.*;
 import java.util.concurrent.ExecutionException;
 
 public class PeerHelper implements Runnable {
 
-	HashMap<InetAddress, Long> addrMap;
-	Peer aPeer;
-	File file1 = new File("connections.txt");
-	PrintStream writer = null;
-	static PrintWriter writer1;
-	static AddressMessage message;
+	private HashMap<InetAddress, Long> nodesLastSeenRemotely;
+	private HashMap<InetAddress, Long> nodesWeSeeActive;
 
-	public PeerHelper(Peer peer, HashMap<InetAddress, Long> hm, PrintStream outWriter) throws FileNotFoundException {
-		addrMap = hm;
-		aPeer = peer;
+	private long guessAtTimeStampDelta;
+
+	private Peer myPeer;
+	private volatile boolean alive;
+
+	private PrintStream writer = null;
+
+	private static final Long INTER_HARVEST_TIME = (long) 10000;
+
+	public PeerHelper(Peer peer, PrintStream outWriter) {
+		this.nodesLastSeenRemotely = new HashMap<InetAddress, Long>();
+		this.nodesWeSeeActive = new HashMap<InetAddress, Long>();
+		this.guessAtTimeStampDelta = Long.MIN_VALUE;
+
+		this.myPeer = peer;
+		this.alive = false;
 		this.writer = outWriter;
-	}
-
-	public static void main(String[] args) throws InterruptedException, ExecutionException {
 	}
 
 	@Override
 	public void run() {
-		
-		System.out.println("starting on " + this.aPeer);
+
+		System.out.println("starting on " + this.myPeer);
+		this.alive = true;
 
 		/*
-		 * keep asking peers for addresses until main thread in peerFinder
-		 * terminates
+		 * keep asking peers for addresses until we have an issue doing such
 		 */
-		while (true) {
-			/* not sure what to do with an exception */
-			try {
-				message = aPeer.getAddr().get();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			} catch (ExecutionException e) {
-				e.printStackTrace();
-			}
+		try {
+			while (true) {
 
-			/*
-			 * get inetAdress and check if in map, if not add else update if
-			 * time updated
-			 */
-			List<PeerAddress> addresses = message.getAddresses();
-			for (PeerAddress addr : addresses) {
-				InetAddress inetAddr = addr.getAddr();
-				if (!addrMap.containsKey(inetAddr)) {
-					addrMap.put(inetAddr, addr.getTime());
-					synchronized (writer) {
-						writer.println("NEW Peer" + inetAddr + ": " + addr.getTime());
-					}
-				} else {
-					Long time = addr.getTime();
-					if (time > addrMap.get(inetAddr)) {
-						synchronized (writer) {
-							writer.println("UPDATED Peer" + inetAddr + ": " + time);
+				/*
+				 * Send getAddr request, block until it's done
+				 */
+				AddressMessage message = myPeer.getAddr().get();
+				long addressMessageArrival = System.currentTimeMillis() / 1000;
+				List<PeerAddress> addresses = message.getAddresses();
+				
+				/*
+				 * Ok, now actually update our storage device
+				 */
+				synchronized (this) {
+					for (PeerAddress addr : addresses) {
+						InetAddress inetAddr = addr.getAddr();
+						long remoteTS = addr.getTime();
+						if (!nodesLastSeenRemotely.containsKey(inetAddr)) {
+							synchronized (writer) {
+								writer.println("NEW Peer" + inetAddr + ": " + addr.getTime());
+							}
+						} else {
+							if (remoteTS > nodesLastSeenRemotely.get(inetAddr)) {
+								synchronized (writer) {
+									writer.println("UPDATED Peer" + inetAddr + ": " + remoteTS);
+								}
+								this.nodesWeSeeActive.put(inetAddr, addressMessageArrival);
+							}
 						}
-						System.out.println(time);
+
+						/*
+						 * Do some checks to see if we can update our guess at
+						 * the time stamp skew between us and the remote node
+						 */
+						long delta = remoteTS - addressMessageArrival;
+						if (delta > this.guessAtTimeStampDelta) {
+							this.guessAtTimeStampDelta = delta;
+						}
+
+						this.nodesLastSeenRemotely.put(inetAddr, remoteTS);
 					}
 				}
-			}
-			try {
-				Thread.sleep(10000);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
 
-			synchronized (writer) {
-				writer.flush();
+				synchronized (writer) {
+					writer.flush();
+				}
+
+				/*
+				 * In the words of the Sage Samuel L Jackson, go the fuck to
+				 * sleep
+				 */
+				Thread.sleep(PeerHelper.INTER_HARVEST_TIME);
+			}
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		} catch (ExecutionException e) {
+			e.printStackTrace();
+		}
+
+		this.alive = false;
+	}
+
+	public boolean isAlive() {
+		return this.alive;
+	}
+
+	public Set<InetAddress> getNodesActiveWithin(long timeWindowInSeconds) {
+		HashSet<InetAddress> retSet = new HashSet<InetAddress>();
+
+		synchronized (this) {
+			long currentTime = System.currentTimeMillis() / 1000;
+
+			for (InetAddress tAddr : this.nodesWeSeeActive.keySet()) {
+				if (currentTime - this.nodesWeSeeActive.get(tAddr) <= timeWindowInSeconds) {
+					retSet.add(tAddr);
+				}
 			}
 		}
 
+		return retSet;
 	}
 
 }
