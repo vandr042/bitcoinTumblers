@@ -11,12 +11,15 @@ import java.io.FileNotFoundException;
 import java.io.PrintStream;
 import java.net.InetAddress;
 import java.util.*;
+import java.util.concurrent.*;
 
 public class PeerFinder implements Runnable {
 
 	private WalletAppKit kit;
 
 	private HashMap<InetAddress, PeerHelper> activePeers;
+	private BlockingQueue<PeerAddress> toTestQueue;
+	
 
 	private PrintStream peerHarvestLog;
 
@@ -35,6 +38,7 @@ public class PeerFinder implements Runnable {
 		 * Build our internal data structures
 		 */
 		this.activePeers = new HashMap<InetAddress, PeerHelper>();
+		this.toTestQueue = new LinkedBlockingQueue<PeerAddress>();
 
 		/*
 		 * Build bitcoinj required objects
@@ -46,6 +50,8 @@ public class PeerFinder implements Runnable {
 		 * Build logging tools
 		 */
 		this.peerHarvestLog = new PrintStream(PeerFinder.PEER_HARVEST_LOG_FILE);
+		
+		//TODO build and start TestConnection Threads here
 	}
 
 	/*
@@ -150,6 +156,12 @@ public class PeerFinder implements Runnable {
 		}
 
 	}
+	
+	public PeerAddress getAddressToTest() throws InterruptedException{
+		return this.toTestQueue.take();
+	}
+	
+	//TODO way to hand back working connections
 
 	public static void main(String[] args) throws Exception {
 		PeerFinder finder = new PeerFinder();
