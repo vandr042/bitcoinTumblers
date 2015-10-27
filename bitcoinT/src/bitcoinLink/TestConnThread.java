@@ -32,6 +32,11 @@ public class TestConnThread implements Runnable {
 		// TODO Auto-generated method stub
 
 	}
+	
+	/* potential problem with race conditions on the hashmap i.e. PeerFinder searches map to
+	 * see if an address is already in it, doesn't find it so adds it to queue - during this time
+	 * Test thread was working on that peer so we get duplicate threads. Depending on how the peer group handles requests to connect
+	 * to already connected peers this may not be possible.*/
 	@Override
 	public void run() {
 		while (true){
@@ -40,7 +45,13 @@ public class TestConnThread implements Runnable {
 				Peer peer = pg.connectTo(addr.getSocketAddress());
 				if (peer != null){
 					PeerHelper newHelper = new PeerHelper(peer,harvestLog);
-					peerMap.put(addr, newHelper);
+					synchronized(peerMap){
+						peerMap.put(addr, newHelper);
+					}
+					Thread tThread = new Thread(newHelper);
+					tThread.setName(addr.toString() + " address harvesting thread");
+					tThread.setDaemon(true);
+					tThread.start();
 				}
 			} catch (InterruptedException e) {
 				e.printStackTrace();

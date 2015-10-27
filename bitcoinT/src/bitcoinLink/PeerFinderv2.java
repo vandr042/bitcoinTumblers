@@ -22,15 +22,15 @@ public class PeerFinderv2 implements Runnable {
 	
 
 	private PrintStream peerHarvestLog;
-
+	private PrintStream hmStats = new PrintStream("hmStats.txt");
 	public static final String PEER_HARVEST_LOG_FILE = "harvest.log";
 	public static final File WALLET_FILE = new File("foo");
 	public static final String WALLET_PFX = "test";
 
 	private static final Long UPDATE_ACTIVE_NODES_INTERVAL = (long) 60000;
-	private static final Long TRY_TO_CONNECT_WINDOW_SEC = (long) 1800;
+	private static final Long TRY_TO_CONNECT_WINDOW_SEC = (long) 10000;
 
-	private static final Long EXPERIMENT_TIME_SEC = (long) 3600;
+	private static final Long EXPERIMENT_TIME_SEC = (long) 1800;
 
 	/* constructor */
 	public PeerFinderv2() throws FileNotFoundException {
@@ -45,7 +45,7 @@ public class PeerFinderv2 implements Runnable {
 		 */
 		NetworkParameters params = MainNetParams.get();
 		this.kit = new WalletAppKit(params, PeerFinderv2.WALLET_FILE, PeerFinderv2.WALLET_PFX);
-
+		
 		/*
 		 * Build logging tools
 		 */
@@ -57,14 +57,15 @@ public class PeerFinderv2 implements Runnable {
 	 * initializes peergroup and starts main thread that will start the helper
 	 * threads
 	 */
-	public void bootstrap() {
+	public void bootstrap() throws InterruptedException {
 		/*
 		 * Start up our connection to the bit coin network
 		 */
 		this.kit.startAsync();
 		this.kit.awaitRunning();
-		startThreadPool();
+		Thread.sleep(10000);
 		List<Peer> bootStrapPeers = this.kit.peerGroup().getConnectedPeers();
+		startThreadPool(); //spin up thread pool 
 
 		/*
 		 * Spin up address harvesters for our initial peers
@@ -107,19 +108,17 @@ public class PeerFinderv2 implements Runnable {
 		pthread.setDaemon(true);
 		pthread.start();
 	}
-	
+
+	/* create thread pool to take from testQueue */
 	private void startThreadPool(){
 		toTestQueue = new LinkedBlockingQueue();
 		int i = 0;
-		
-		/* create thread pool to take from testQueue */
 		
 		while (i < 28){
 			TestConnThread newTest = new TestConnThread(toTestQueue, kit.peerGroup(), activePeers, peerHarvestLog);
 			Thread cThread = new Thread(newTest);
 			cThread.setDaemon(true);
 			cThread.start();
-			System.out.println("thread " + i);
 			i++;
 		}
 	}
@@ -127,7 +126,7 @@ public class PeerFinderv2 implements Runnable {
 	public void run() {
 		
 		long startTimeSec = System.currentTimeMillis() / 1000;
-		while ((System.currentTimeMillis() / 1000) - startTimeSec < PeerFinderv2.EXPERIMENT_TIME_SEC) {
+		while ((startTimeSec - System.currentTimeMillis()/ 1000)  < PeerFinderv2.EXPERIMENT_TIME_SEC) {
 			/*
 			 * Wait the UPDATE_ACTIVE_NODES_INTERVAL milliseconds
 			 */
@@ -164,10 +163,12 @@ public class PeerFinderv2 implements Runnable {
 			/*
 			 * A little bit of reporting
 			 */
+			
+			hmStats.println(startTimeSec - System.currentTimeMillis()/1000 + " connected to: " + this.activePeers.size());
 			System.out.println("connected to: " + this.activePeers.size());
 			System.out.println("active nodes we're not connected to: " + activePeersWeKnow.size());
 
-			//TODO we want to try and connect to addresses in activePeersWeKnow here
+			/* add active peers to que so test threads can start working */
 			for (PeerAddress aPeerAddr : activePeersWeKnow){
 				if (aPeerAddr == null) {
 					System.out.println("No Peers Found");
@@ -177,14 +178,12 @@ public class PeerFinderv2 implements Runnable {
 				}
 			}
 		}
-
+		System.out.println(activePeers);
 	}
 	
 	public PeerAddress getAddressToTest() throws InterruptedException{
 		return this.toTestQueue.take();
 	}
-	
-	//TODO way to hand back working connections
 
 	public static void main(String[] args) throws Exception {
 		PeerFinderv2 finder = new PeerFinderv2();

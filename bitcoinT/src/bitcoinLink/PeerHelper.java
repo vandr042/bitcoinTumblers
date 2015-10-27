@@ -33,7 +33,7 @@ public class PeerHelper implements Runnable {
 	@Override
 	public void run() {
 
-		//System.out.println("starting on " + this.myPeer);
+		System.out.println("starting on " + this.myPeer);
 		this.alive = true;
 
 		/*
@@ -62,6 +62,7 @@ public class PeerHelper implements Runnable {
 							}
 						} else {
 							if (remoteTS > nodesLastSeenRemotely.get(addr)) {
+								System.out.println("found updated peer");
 								synchronized (writer) {
 									writer.println("UPDATED Peer" + addr + ": " + remoteTS);
 								}
@@ -111,8 +112,14 @@ public class PeerHelper implements Runnable {
 		synchronized (this) {
 			long currentTime = System.currentTimeMillis() / 1000;
 
-			for (PeerAddress tAddr : this.nodesWeSeeActive.keySet()) {
+			/*for (PeerAddress tAddr : this.nodesWeSeeActive.keySet()) {
 				if (currentTime - this.nodesWeSeeActive.get(tAddr) <= timeWindowInSeconds) {
+					retSet.add(tAddr);
+				}
+			}*/
+			/* added this to test over a smaller period of time */
+			for (PeerAddress tAddr : this.nodesLastSeenRemotely.keySet()){
+				if (currentTime - this.nodesLastSeenRemotely.get(tAddr) <= timeWindowInSeconds){
 					retSet.add(tAddr);
 				}
 			}
