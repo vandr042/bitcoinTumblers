@@ -13,11 +13,11 @@ import java.net.InetAddress;
 import java.util.*;
 import java.util.concurrent.*;
 
-public class PeerFinder implements Runnable {
+public class PeerFinderv2 implements Runnable {
 
 	private WalletAppKit kit;
 
-	private HashMap<InetAddress, PeerHelper> activePeers;
+	private HashMap<PeerAddress, PeerHelper> activePeers;
 	private BlockingQueue<PeerAddress> toTestQueue;
 	
 
@@ -33,25 +33,24 @@ public class PeerFinder implements Runnable {
 	private static final Long EXPERIMENT_TIME_SEC = (long) 3600;
 
 	/* constructor */
-	public PeerFinder() throws FileNotFoundException {
+	public PeerFinderv2() throws FileNotFoundException {
 		/*
 		 * Build our internal data structures
 		 */
-		this.activePeers = new HashMap<InetAddress, PeerHelper>();
+		this.activePeers = new HashMap<PeerAddress, PeerHelper>();
 		this.toTestQueue = new LinkedBlockingQueue<PeerAddress>();
 
 		/*
 		 * Build bitcoinj required objects
 		 */
 		NetworkParameters params = MainNetParams.get();
-		this.kit = new WalletAppKit(params, PeerFinder.WALLET_FILE, PeerFinder.WALLET_PFX);
+		this.kit = new WalletAppKit(params, PeerFinderv2.WALLET_FILE, PeerFinderv2.WALLET_PFX);
 
 		/*
 		 * Build logging tools
 		 */
-		this.peerHarvestLog = new PrintStream(PeerFinder.PEER_HARVEST_LOG_FILE);
+		this.peerHarvestLog = new PrintStream(PeerFinderv2.PEER_HARVEST_LOG_FILE);
 		
-		//TODO build and start TestConnection Threads here
 	}
 
 	/*
@@ -64,6 +63,7 @@ public class PeerFinder implements Runnable {
 		 */
 		this.kit.startAsync();
 		this.kit.awaitRunning();
+		startThreadPool();
 		List<Peer> bootStrapPeers = this.kit.peerGroup().getConnectedPeers();
 
 		/*
@@ -84,39 +84,53 @@ public class PeerFinder implements Runnable {
 		 * Create needed data structures and update the master's state, let's
 		 * synchronize on this just to be safe
 		 */
-		InetAddress peersIP = peerToStart.getAddress().getAddr();
+		PeerAddress peersAddr = peerToStart.getAddress();
 		PeerHelper newHelper = null;
 		synchronized (this) {
 			/*
 			 * Check to make sure this peer does not already have a peer helper
 			 * object spun up, if so just silently exit
 			 */
-			if (this.activePeers.containsKey(peersIP)) {
+			if (this.activePeers.containsKey(peersAddr)) {
 				return;
 			}
 
 			newHelper = new PeerHelper(peerToStart, peerHarvestLog);
-			this.activePeers.put(peersIP, newHelper);
+			this.activePeers.put(peersAddr, newHelper);
 		}
 
 		/*
 		 * Create the peer helper object, wrapping thread, and start it
 		 */
 		Thread pthread = new Thread(newHelper);
-		pthread.setName(peersIP.toString() + " address harvesting thread");
+		pthread.setName(peersAddr.toString() + " address harvesting thread");
 		pthread.setDaemon(true);
 		pthread.start();
 	}
+	
+	private void startThreadPool(){
+		toTestQueue = new LinkedBlockingQueue();
+		int i = 0;
+		
+		/* create thread pool to take from testQueue */
+		
+		while (i < 28){
+			TestConnThread newTest = new TestConnThread(toTestQueue, kit.peerGroup());
+			Thread cThread = new Thread(newTest);
+			cThread.setDaemon(true);
+			cThread.start();
+		}
+	}
 
 	public void run() {
-
+		
 		long startTimeSec = System.currentTimeMillis() / 1000;
-		while ((System.currentTimeMillis() / 1000) - startTimeSec < PeerFinder.EXPERIMENT_TIME_SEC) {
+		while ((System.currentTimeMillis() / 1000) - startTimeSec < PeerFinderv2.EXPERIMENT_TIME_SEC) {
 			/*
 			 * Wait the UPDATE_ACTIVE_NODES_INTERVAL milliseconds
 			 */
 			try {
-				Thread.sleep(PeerFinder.UPDATE_ACTIVE_NODES_INTERVAL);
+				Thread.sleep(PeerFinderv2.UPDATE_ACTIVE_NODES_INTERVAL);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
@@ -125,12 +139,12 @@ public class PeerFinder implements Runnable {
 			 * Get all addresses we know about
 			 */
 
-			Set<InetAddress> activePeersWeKnow = new HashSet<InetAddress>();
-			Set<InetAddress> deadPeers = new HashSet<InetAddress>();
+			Set<PeerAddress> activePeersWeKnow = new HashSet<PeerAddress>();
+			Set<PeerAddress> deadPeers = new HashSet<PeerAddress>();
 			synchronized (this) {
-				for (InetAddress tConnectedAddr : this.activePeers.keySet()) {
-					activePeersWeKnow.addAll(this.activePeers.get(tConnectedAddr).getNodesActiveWithin(
-							PeerFinder.TRY_TO_CONNECT_WINDOW_SEC));
+				for (PeerAddress tConnectedAddr : this.activePeers.keySet()) {
+					activePeersWeKnow.addAll(this.activePeers.get(tConnectedAddr).getNodesActiveWithin( //TODO change this to PeerAddresses
+							PeerFinderv2.TRY_TO_CONNECT_WINDOW_SEC));
 					if (!this.activePeers.get(tConnectedAddr).isAlive()) {
 						deadPeers.add(tConnectedAddr);
 					}
@@ -140,7 +154,7 @@ public class PeerFinder implements Runnable {
 				 * Purge dead peers, also remove from active peers the nodes
 				 * we're already connected to
 				 */
-				for (InetAddress tDead : deadPeers) {
+				for (PeerAddress tDead : deadPeers) {
 					this.activePeers.remove(tDead);
 				}
 				activePeersWeKnow.removeAll(this.activePeers.keySet());
@@ -149,10 +163,13 @@ public class PeerFinder implements Runnable {
 			/*
 			 * A little bit of reporting
 			 */
-			System.out.println("connected to: " + this.activePeers.size());
+			System.out.println("connected to: " + kit.peerGroup().getConnectedPeers().size());
 			System.out.println("active nodes we're not connected to: " + activePeersWeKnow.size());
 
 			//TODO we want to try and connect to addresses in activePeersWeKnow here
+			for (PeerAddress aPeerAddr : activePeersWeKnow){
+				toTestQueue.offer(aPeerAddr);
+			}
 		}
 
 	}
@@ -164,7 +181,7 @@ public class PeerFinder implements Runnable {
 	//TODO way to hand back working connections
 
 	public static void main(String[] args) throws Exception {
-		PeerFinder finder = new PeerFinder();
+		PeerFinderv2 finder = new PeerFinderv2();
 		finder.bootstrap();
 
 		Thread tthread = new Thread(finder);

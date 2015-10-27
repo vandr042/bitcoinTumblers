@@ -8,8 +8,8 @@ import java.util.concurrent.ExecutionException;
 
 public class PeerHelper implements Runnable {
 
-	private HashMap<InetAddress, Long> nodesLastSeenRemotely;
-	private HashMap<InetAddress, Long> nodesWeSeeActive;
+	private HashMap<PeerAddress, Long> nodesLastSeenRemotely;
+	private HashMap<PeerAddress, Long> nodesWeSeeActive;
 
 	private long guessAtTimeStampDelta;
 
@@ -21,8 +21,8 @@ public class PeerHelper implements Runnable {
 	private static final Long INTER_HARVEST_TIME = (long) 10000;
 
 	public PeerHelper(Peer peer, PrintStream outWriter) {
-		this.nodesLastSeenRemotely = new HashMap<InetAddress, Long>();
-		this.nodesWeSeeActive = new HashMap<InetAddress, Long>();
+		this.nodesLastSeenRemotely = new HashMap<PeerAddress, Long>();
+		this.nodesWeSeeActive = new HashMap<PeerAddress, Long>();
 		this.guessAtTimeStampDelta = Long.MIN_VALUE;
 
 		this.myPeer = peer;
@@ -54,18 +54,18 @@ public class PeerHelper implements Runnable {
 				 */
 				synchronized (this) {
 					for (PeerAddress addr : addresses) {
-						InetAddress inetAddr = addr.getAddr();
+						//InetAddress inetAddr = addr.getAddr();  Removed because we use PeerAddress Instead
 						long remoteTS = addr.getTime();
-						if (!nodesLastSeenRemotely.containsKey(inetAddr)) {
+						if (!nodesLastSeenRemotely.containsKey(addr)) {
 							synchronized (writer) {
-								writer.println("NEW Peer" + inetAddr + ": " + addr.getTime());
+								writer.println("NEW Peer" + addr + ": " + addr.getTime());
 							}
 						} else {
-							if (remoteTS > nodesLastSeenRemotely.get(inetAddr)) {
+							if (remoteTS > nodesLastSeenRemotely.get(addr)) {
 								synchronized (writer) {
-									writer.println("UPDATED Peer" + inetAddr + ": " + remoteTS);
+									writer.println("UPDATED Peer" + addr + ": " + remoteTS);
 								}
-								this.nodesWeSeeActive.put(inetAddr, addressMessageArrival);
+								this.nodesWeSeeActive.put(addr, addressMessageArrival);
 							}
 						}
 
@@ -78,7 +78,7 @@ public class PeerHelper implements Runnable {
 							this.guessAtTimeStampDelta = delta;
 						}
 
-						this.nodesLastSeenRemotely.put(inetAddr, remoteTS);
+						this.nodesLastSeenRemotely.put(addr, remoteTS);
 					}
 				}
 
@@ -105,13 +105,13 @@ public class PeerHelper implements Runnable {
 		return this.alive;
 	}
 
-	public Set<InetAddress> getNodesActiveWithin(long timeWindowInSeconds) {
-		HashSet<InetAddress> retSet = new HashSet<InetAddress>();
+	public Set<PeerAddress> getNodesActiveWithin(long timeWindowInSeconds) {
+		HashSet<PeerAddress> retSet = new HashSet<PeerAddress>();
 
 		synchronized (this) {
 			long currentTime = System.currentTimeMillis() / 1000;
 
-			for (InetAddress tAddr : this.nodesWeSeeActive.keySet()) {
+			for (PeerAddress tAddr : this.nodesWeSeeActive.keySet()) {
 				if (currentTime - this.nodesWeSeeActive.get(tAddr) <= timeWindowInSeconds) {
 					retSet.add(tAddr);
 				}
