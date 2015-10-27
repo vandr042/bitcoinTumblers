@@ -33,7 +33,7 @@ public class PeerHelper implements Runnable {
 	@Override
 	public void run() {
 
-		System.out.println("starting on " + this.myPeer);
+		//System.out.println("starting on " + this.myPeer);
 		this.alive = true;
 
 		/*
@@ -117,7 +117,6 @@ public class PeerHelper implements Runnable {
 				}
 			}
 		}
-
 		return retSet;
 	}
 

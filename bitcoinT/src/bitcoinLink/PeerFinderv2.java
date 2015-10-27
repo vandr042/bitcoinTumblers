@@ -115,10 +115,12 @@ public class PeerFinderv2 implements Runnable {
 		/* create thread pool to take from testQueue */
 		
 		while (i < 28){
-			TestConnThread newTest = new TestConnThread(toTestQueue, kit.peerGroup());
+			TestConnThread newTest = new TestConnThread(toTestQueue, kit.peerGroup(), activePeers, peerHarvestLog);
 			Thread cThread = new Thread(newTest);
 			cThread.setDaemon(true);
 			cThread.start();
+			System.out.println("thread " + i);
+			i++;
 		}
 	}
 
@@ -143,8 +145,7 @@ public class PeerFinderv2 implements Runnable {
 			Set<PeerAddress> deadPeers = new HashSet<PeerAddress>();
 			synchronized (this) {
 				for (PeerAddress tConnectedAddr : this.activePeers.keySet()) {
-					activePeersWeKnow.addAll(this.activePeers.get(tConnectedAddr).getNodesActiveWithin( //TODO change this to PeerAddresses
-							PeerFinderv2.TRY_TO_CONNECT_WINDOW_SEC));
+					activePeersWeKnow.addAll(this.activePeers.get(tConnectedAddr).getNodesActiveWithin(PeerFinderv2.TRY_TO_CONNECT_WINDOW_SEC));
 					if (!this.activePeers.get(tConnectedAddr).isAlive()) {
 						deadPeers.add(tConnectedAddr);
 					}
@@ -163,12 +164,17 @@ public class PeerFinderv2 implements Runnable {
 			/*
 			 * A little bit of reporting
 			 */
-			System.out.println("connected to: " + kit.peerGroup().getConnectedPeers().size());
+			System.out.println("connected to: " + this.activePeers.size());
 			System.out.println("active nodes we're not connected to: " + activePeersWeKnow.size());
 
 			//TODO we want to try and connect to addresses in activePeersWeKnow here
 			for (PeerAddress aPeerAddr : activePeersWeKnow){
-				toTestQueue.offer(aPeerAddr);
+				if (aPeerAddr == null) {
+					System.out.println("No Peers Found");
+				}else{
+					System.out.println("Adding peer to que: " + aPeerAddr);
+					toTestQueue.offer(aPeerAddr);
+				}
 			}
 		}
 
