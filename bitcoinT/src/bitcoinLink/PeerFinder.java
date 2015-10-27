@@ -13,7 +13,7 @@ import java.net.InetAddress;
 import java.util.*;
 import java.util.concurrent.*;
 
-public class PeerFinderv2 implements Runnable {
+public class PeerFinder implements Runnable {
 
 	private WalletAppKit kit;
 
@@ -33,7 +33,7 @@ public class PeerFinderv2 implements Runnable {
 	private static final Long EXPERIMENT_TIME_SEC = (long) 1800;
 
 	/* constructor */
-	public PeerFinderv2() throws FileNotFoundException {
+	public PeerFinder() throws FileNotFoundException {
 		/*
 		 * Build our internal data structures
 		 */
@@ -44,12 +44,12 @@ public class PeerFinderv2 implements Runnable {
 		 * Build bitcoinj required objects
 		 */
 		NetworkParameters params = MainNetParams.get();
-		this.kit = new WalletAppKit(params, PeerFinderv2.WALLET_FILE, PeerFinderv2.WALLET_PFX);
+		this.kit = new WalletAppKit(params, PeerFinder.WALLET_FILE, PeerFinder.WALLET_PFX);
 		
 		/*
 		 * Build logging tools
 		 */
-		this.peerHarvestLog = new PrintStream(PeerFinderv2.PEER_HARVEST_LOG_FILE);
+		this.peerHarvestLog = new PrintStream(PeerFinder.PEER_HARVEST_LOG_FILE);
 		
 	}
 
@@ -126,12 +126,12 @@ public class PeerFinderv2 implements Runnable {
 	public void run() {
 		
 		long startTimeSec = System.currentTimeMillis() / 1000;
-		while ((startTimeSec - System.currentTimeMillis()/ 1000)  < PeerFinderv2.EXPERIMENT_TIME_SEC) {
+		while ((startTimeSec - System.currentTimeMillis()/ 1000)  < PeerFinder.EXPERIMENT_TIME_SEC) {
 			/*
 			 * Wait the UPDATE_ACTIVE_NODES_INTERVAL milliseconds
 			 */
 			try {
-				Thread.sleep(PeerFinderv2.UPDATE_ACTIVE_NODES_INTERVAL);
+				Thread.sleep(PeerFinder.UPDATE_ACTIVE_NODES_INTERVAL);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
@@ -144,7 +144,7 @@ public class PeerFinderv2 implements Runnable {
 			Set<PeerAddress> deadPeers = new HashSet<PeerAddress>();
 			synchronized (this) {
 				for (PeerAddress tConnectedAddr : this.activePeers.keySet()) {
-					activePeersWeKnow.addAll(this.activePeers.get(tConnectedAddr).getNodesActiveWithin(PeerFinderv2.TRY_TO_CONNECT_WINDOW_SEC));
+					activePeersWeKnow.addAll(this.activePeers.get(tConnectedAddr).getNodesActiveWithin(PeerFinder.TRY_TO_CONNECT_WINDOW_SEC));
 					if (!this.activePeers.get(tConnectedAddr).isAlive()) {
 						deadPeers.add(tConnectedAddr);
 					}
@@ -186,7 +186,7 @@ public class PeerFinderv2 implements Runnable {
 	}
 
 	public static void main(String[] args) throws Exception {
-		PeerFinderv2 finder = new PeerFinderv2();
+		PeerFinder finder = new PeerFinder();
 		finder.bootstrap();
 
 		Thread tthread = new Thread(finder);
