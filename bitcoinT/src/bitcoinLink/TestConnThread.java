@@ -1,61 +1,75 @@
 package bitcoinLink;
 
 import java.io.PrintStream;
-import java.util.HashMap;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
-import org.bitcoinj.core.BlockChain;
-import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Peer;
 import org.bitcoinj.core.PeerAddress;
 import org.bitcoinj.core.PeerGroup;
-import org.bitcoinj.core.VersionMessage;
-import org.bitcoinj.kits.WalletAppKit;
 
 public class TestConnThread implements Runnable {
-	
-	private BlockingQueue<PeerAddress> que;
-	private PeerGroup pg;
-	private HashMap<PeerAddress, PeerHelper> peerMap;
-	private PrintStream harvestLog;
-	
-	public TestConnThread(BlockingQueue<PeerAddress> toTestQueue, PeerGroup peerGroup, HashMap<PeerAddress, PeerHelper> hm, PrintStream log){
-		this.que = toTestQueue;
-		this.pg = peerGroup;
-		this.peerMap = hm;
-		harvestLog = log;
-	}
-		
-	public static void main(String[] args) {
-		// TODO Auto-generated method stub
 
+	private PeerFinder parent;
+	private PeerGroup pg;
+	private PrintStream testConnLog;
+
+	public TestConnThread(PeerFinder parent, PeerGroup peerGroup, PrintStream log) {
+		this.parent = parent;
+		this.pg = peerGroup;
+		this.testConnLog = log;
 	}
-	
-	/* potential problem with race conditions on the hashmap i.e. PeerFinder searches map to
-	 * see if an address is already in it, doesn't find it so adds it to queue - during this time
-	 * Test thread was working on that peer so we get duplicate threads. Depending on how the peer group handles requests to connect
-	 * to already connected peers this may not be possible.*/
-	@Override
+
 	public void run() {
-		while (true){
-			try {
-				PeerAddress addr = que.take();
-				Peer peer = pg.connectTo(addr.getSocketAddress());
-				if (peer != null){
-					PeerHelper newHelper = new PeerHelper(peer,harvestLog);
-					synchronized(peerMap){
-						peerMap.put(addr, newHelper);
+		try {
+			/*
+			 * Simple slave loop which gets an address to connect to, tries, and
+			 * tells the parent if it worked or not
+			 */
+			while (true) {
+				/*
+				 * Step one, block till we have work to do
+				 */
+				PeerAddress testAddr = this.parent.getAddressToTest();
+				System.out.println("I GET TO TEST " + testAddr);
+
+				/*
+				 * step two, try to start the connection
+				 */
+				Peer testPeer = pg.connectTo(testAddr.getSocketAddress());
+				if (testPeer != null) {
+					
+					try {
+						testPeer.getVersionHandshakeFuture().get(10, TimeUnit.SECONDS);
+						this.parent.reportConnectionSuccess(testAddr, testPeer);
+						synchronized (this.testConnLog) {
+							this.testConnLog.println("Added working: " + testAddr);
+						}
+					} catch (ExecutionException e) {
+						System.out.println("DERP");
+						this.parent.reportConnectionFailure(testAddr);
+					} catch (TimeoutException e) {
+						System.out.println("TIMOEUT");
+						this.parent.reportConnectionFailure(testAddr);
 					}
-					Thread tThread = new Thread(newHelper);
-					tThread.setName(addr.toString() + " address harvesting thread");
-					tThread.setDaemon(true);
-					tThread.start();
+				} else {
+					this.parent.reportConnectionFailure(testAddr);
+					synchronized (this.testConnLog) {
+						this.testConnLog.println("Null in connection: " + testAddr);
+					}
 				}
-			} catch (InterruptedException e) {
-				e.printStackTrace();
+
+				synchronized (this.testConnLog) {
+					this.testConnLog.flush();
+				}
+				
+				System.out.println("DONE TESTING!");
 			}
+		} catch (InterruptedException e) {
+			e.printStackTrace();
 		}
+		
+		System.out.println("HOLY SHIT I'M LOST");
 	}
 }
