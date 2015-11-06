@@ -9,7 +9,7 @@ import java.util.concurrent.ExecutionException;
 public class PeerHelper implements Runnable {
 
 	private HashMap<PeerAddress, Long> nodesLastSeenRemotely;
-	private HashMap<PeerAddress, Long> nodesWeSeeActive;
+	private HashSet<PeerAddress> observedConnections;
 
 	private long guessAtTimeStampDelta;
 
@@ -22,8 +22,12 @@ public class PeerHelper implements Runnable {
 
 	public PeerHelper(Peer peer, PrintStream outWriter) {
 		this.nodesLastSeenRemotely = new HashMap<PeerAddress, Long>();
-		this.nodesWeSeeActive = new HashMap<PeerAddress, Long>();
-		this.guessAtTimeStampDelta = Long.MIN_VALUE;
+		this.observedConnections = new HashSet<PeerAddress>();
+		if(peer == null){
+			System.out.println("DAAAAAAAAAAAAAAAAA FUCK");
+		}
+		this.guessAtTimeStampDelta = peer.getPeerVersionMessage().time - (System.currentTimeMillis() / 1000);
+		System.out.println("guessed ts delta for " + peer.getAddress() + " is " + this.guessAtTimeStampDelta);
 
 		this.myPeer = peer;
 		this.alive = false;
@@ -46,37 +50,28 @@ public class PeerHelper implements Runnable {
 				 * Send getAddr request, block until it's done
 				 */
 				AddressMessage message = myPeer.getAddr().get();
-				long addressMessageArrival = System.currentTimeMillis() / 1000;
 				List<PeerAddress> addresses = message.getAddresses();
-				
+
 				/*
 				 * Ok, now actually update our storage device
 				 */
 				synchronized (this) {
 					for (PeerAddress addr : addresses) {
-						//InetAddress inetAddr = addr.getAddr();  Removed because we use PeerAddress Instead
 						long remoteTS = addr.getTime();
 						if (!nodesLastSeenRemotely.containsKey(addr)) {
 							synchronized (writer) {
-								writer.println("NEW Peer" + addr + ": " + addr.getTime());
+								writer.println("NEW Peer" + addr + ": " + addr.getTime() + " learned from "
+										+ this.myPeer.getAddress());
 							}
 						} else {
 							if (remoteTS > nodesLastSeenRemotely.get(addr)) {
 								System.out.println("found updated peer");
 								synchronized (writer) {
-									writer.println("UPDATED Peer" + addr + ": " + remoteTS);
+									writer.println("LOGON Peer" + addr + ": " + System.currentTimeMillis() / 1000
+											+ " observed at " + this.myPeer.getAddress());
 								}
-								this.nodesWeSeeActive.put(addr, addressMessageArrival);
+								this.observedConnections.add(addr);
 							}
-						}
-
-						/*
-						 * Do some checks to see if we can update our guess at
-						 * the time stamp skew between us and the remote node
-						 */
-						long delta = remoteTS - addressMessageArrival;
-						if (delta > this.guessAtTimeStampDelta) {
-							this.guessAtTimeStampDelta = delta;
 						}
 
 						this.nodesLastSeenRemotely.put(addr, remoteTS);
@@ -110,21 +105,38 @@ public class PeerHelper implements Runnable {
 		HashSet<PeerAddress> retSet = new HashSet<PeerAddress>();
 
 		synchronized (this) {
-			long currentTime = System.currentTimeMillis() / 1000;
+			/*
+			 * Build the time horizon, which is our current time, skewed by the
+			 * peer's clock view (which gets us what the peer thinks now is) and
+			 * then the back of the window
+			 */
+			long timeHorizon = System.currentTimeMillis() / 1000 + this.guessAtTimeStampDelta - timeWindowInSeconds;
 
-			/*for (PeerAddress tAddr : this.nodesWeSeeActive.keySet()) {
-				if (currentTime - this.nodesWeSeeActive.get(tAddr) <= timeWindowInSeconds) {
-					retSet.add(tAddr);
-				}
-			}*/
-			/* added this to test over a smaller period of time */
-			for (PeerAddress tAddr : this.nodesLastSeenRemotely.keySet()){
-				if (currentTime - this.nodesLastSeenRemotely.get(tAddr) <= timeWindowInSeconds){
+			/*
+			 * Look through their list of peers/last connected to mappings,
+			 * return all nodes which fall inside the time horizon
+			 */
+			for (PeerAddress tAddr : this.nodesLastSeenRemotely.keySet()) {
+				if (this.nodesLastSeenRemotely.get(tAddr) >= timeHorizon) {
 					retSet.add(tAddr);
 				}
 			}
 		}
 		return retSet;
+	}
+
+	public Set<PeerAddress> getConnectedNodes() {
+		/*
+		 * Save the current set of observed new connections and create an empty
+		 * set for the next round
+		 */
+		Set<PeerAddress> outSet = null;
+		synchronized (this) {
+			outSet = this.observedConnections;
+			this.observedConnections = new HashSet<PeerAddress>();
+		}
+
+		return outSet;
 	}
 
 }
