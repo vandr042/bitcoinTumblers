@@ -1,5 +1,6 @@
 #!/bin/bash
 
+#TODO might need a bin dir first
 rm -rf bin/
 mkdir bin/
 javac -cp commons-logging-1.2/commons-logging-1.2.jar:bitcoinj-core-0.13-bundled.jar:slf4j-jcl-1.7.12.jar:src/ -d bin/ src/bitcoinLink/PeerFinder.java
