@@ -1,5 +1,9 @@
+#!/usr/bin/env python3
+
 import re
 import math
+import numpy as np
+import matplotlib.pyplot as plt
 
 def contains(l,n): #check if already in list
     try:
@@ -8,45 +12,59 @@ def contains(l,n): #check if already in list
     except ValueError as e:
         return -1
 
-addrDict = dict()
-f = open('/home/connor/workspace/bitcoinTumblers/bitcoinT/harvest.log', 'r')
-wFile = open('testWrite.txt','w')
-s = f.readline()
-badCount = 0
-z = 0
 
+if __name__ == "__main__":
+    addrDict = dict()
+    LOG_FILE = "/scratch/waterhouse/schuch/git/bitcoinTumblers/bitcoinT/harvest.log"
+    f = open(LOG_FILE, 'r')
+    wFile = open('testWrite.txt','w')
+    goodCount = 0
+    badCount = 0
+    z = 0
+    
 #extract addresses from file
-while(z < 1000):
-    m = re.findall(r'(\d{0,5}\.\d{0,5}\.\d{0,5}\.\d{0,5}\]\:\d{4})', s)
-    if (len(m) < 2): # check if bad address
+    for s in f:
+        m = re.findall(r'(\d{0,5}\.\d{0,5}\.\d{0,5}\.\d{0,5}\]\:\d{4})', s)
+        if (len(m) < 2): # check if bad address
             badCount += 1
-    else:
-        for i in range(len(m)):
-            m[i] = re.sub(r'\]',"",m[i])
-        if m[0] in addrDict:
-            #Is peer already listed as knowing about this address?
-            knownAddr = contains(addrDict[m[0]], m[1])      
-            if knownAddr == -1:         # if not in list append
-                addrDict[m[0]].append(m[1])
         else:
+            goodCount += 1
+            for i in range(len(m)):
+                m[i] = re.sub(r'\]',"",m[i])
+            if m[0] in addrDict:
+            #Is peer already listed as knowing about this address?
+                knownAddr = contains(addrDict[m[0]], m[1])      
+                if knownAddr == -1:         # if not in list append
+                    addrDict[m[0]].append(m[1])
+            else:
             #if first time seeing address, add to dict
-            addrDict[m[0]] = [m[1]]
-    z+=1
-    s = f.readline()
+                addrDict[m[0]] = [m[1]]
+        z+=1
 
-print("done")
-print(badCount) #bad addresses
+    print("done")
+    print("bad " + str(badCount)) #bad addresses
+    print("good " + str(goodCount))
 
 #writing values to file for test
-y = 0
-for index,key in enumerate(addrDict):
-    wFile.write(str(addrDict[key]) + '\n')
-    y+=1
-    if y == 500:
-        break
+    greaterThanOne = 0
+    myVals = []
+    for key in addrDict:
+        wFile.write(str(key) + "," + str(len(addrDict[key])) + "\n")
+        myVals.append(len(addrDict[key]))
+        if len(addrDict[key]) > 1:
+            greaterThanOne += 1
+    wFile.close()
+    print("greater than one " + str(greaterThanOne))
 
-wFile.close()
 
+    x = np.sort(myVals)
+    y = np.array(range(len(myVals))) / len(myVals)
+
+    curFig = plt.figure()
+    plt.plot(x, y, figure=curFig)
+    curFig.savefig("test.pdf", format="pdf")
+
+    
 
 
 
