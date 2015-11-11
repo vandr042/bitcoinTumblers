@@ -33,7 +33,7 @@ public class PeerFinder implements Runnable {
 
 	private static final Long UPDATE_ACTIVE_NODES_INTERVAL = (long) 60000;
 	private static final Long TRY_TO_CONNECT_WINDOW_SEC = (long) 86400;
-	private static final Long EXPERIMENT_TIME_SEC = (long) 7200;
+	private static final Long EXPERIMENT_TIME_SEC = (long) 14400;
 
 	private static final int NUMBER_OF_TEST_CONN_THREADS = 30;
 
