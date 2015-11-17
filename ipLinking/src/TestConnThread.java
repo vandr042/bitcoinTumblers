@@ -1,4 +1,3 @@
-package bitcoinLink;
 
 import java.io.PrintStream;
 import java.util.concurrent.ExecutionException;

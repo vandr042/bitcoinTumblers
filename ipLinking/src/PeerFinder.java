@@ -1,4 +1,3 @@
-package bitcoinLink;
 
 import org.bitcoinj.core.*;
 import org.bitcoinj.kits.WalletAppKit;
