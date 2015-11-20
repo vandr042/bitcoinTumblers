@@ -1,27 +1,25 @@
 package exchange;
 
-import java.util.Date;
-
 
 public class Trade {
+
+    private String type, //Ask = Sell; Bid = Buy
+                SYMB_PAIR, //ex. "BTC_USD"
+                EXCH, //ex. "BTC_USD"
+                prov, //Where we got the info from ex. "btc-e.com"
+                time_completed, //timestamp of the trade
+                tid; //trade ID
     
-    //Don;t exactly know what provenance should be...
-    private String type, SYMB_PAIR, EXCH, prov;
-    private float volume, price;
-    private Date time_completed;
-    private int Trade_ID;
+    private double volume, //amount bought or sold
+                   price; //price at which trade was made
     
-    public void Trade(String type, String SYMB_PAIR, String EXCH, String prov, float volume, float price, Date time_completed, int Trade_ID){
-        
-        //Will add better functions {get(), set()} if needed...
+    public void Trade(String type, String SYMB_PAIR, String EXCH, String prov, double price, double volume, String time_completed, String tid){
         this.type = type;
         this.SYMB_PAIR = SYMB_PAIR;
         this.EXCH = EXCH;
         this.prov = prov;
         this.volume = volume;     
         this.price = price;
-        this.Trade_ID = Trade_ID;
-                
+        this.tid = tid;           
     }
-    
 }
