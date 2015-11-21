@@ -20,6 +20,7 @@ public class Trade {
         this.prov = prov;
         this.volume = volume;     
         this.price = price;
+        this.time_completed = time_completed;
         this.tid = tid;           
     }
     

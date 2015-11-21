@@ -15,7 +15,8 @@ public final class Exchange {
         System.out.println(trades.size());
         BTCEParser btceparser = new BTCEParser(trades);
         System.out.println(trades.size());
-        System.out.println(((Trade)(trades.peek())).getString());
-
+        for (int i = 0; i < trades.size(); i++){
+            System.out.println(((Trade)(trades.take())).getString());
+        }
     }
 }

@@ -50,15 +50,9 @@ public class BTCEParser {
                 );
                 
                 trades.put(a);
-                //System.out.println( root.names().get(i).toString() );
-                
-
             }
             break;
         }
-        //System.out.println(trades);
-        //Next I will write the code to loop through each set inside root, and convert them into Trade objects that will be put into the Observable list, 
-        //which is serialized when its count gets to 1 Million or maybe 100,000.
     }
     
 }
