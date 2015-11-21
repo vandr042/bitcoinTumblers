@@ -13,7 +13,7 @@ public class Trade {
     private double volume, //amount bought or sold
                    price; //price at which trade was made
     
-    public void Trade(String type, String SYMB_PAIR, String EXCH, String prov, double price, double volume, String time_completed, String tid){
+    public Trade(String type, String SYMB_PAIR, String EXCH, String prov, double price, double volume, String time_completed, String tid){
         this.type = type;
         this.SYMB_PAIR = SYMB_PAIR;
         this.EXCH = EXCH;
@@ -21,5 +21,9 @@ public class Trade {
         this.volume = volume;     
         this.price = price;
         this.tid = tid;           
+    }
+    
+    public String getString(){
+        return type+","+EXCH+","+prov+","+time_completed+","+tid+","+volume+","+price;
     }
 }
