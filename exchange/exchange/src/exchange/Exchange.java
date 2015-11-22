@@ -12,11 +12,13 @@ public final class Exchange {
         
         LinkedBlockingQueue<Trade> trades = new LinkedBlockingQueue<>();
         
-        System.out.println(trades.size());
+        Serializer serializer = new Serializer(trades);
+        serializer.trade_serializer.start();
+        serializer.run();
+        
         BTCEParser btceparser = new BTCEParser(trades);
-        System.out.println(trades.size());
-        for (int i = 0; i < trades.size(); i++){
-            System.out.println(((Trade)(trades.take())).getString());
-        }
+        btceparser.btce_parser.start();
+        btceparser.run();
+        
     }
 }
