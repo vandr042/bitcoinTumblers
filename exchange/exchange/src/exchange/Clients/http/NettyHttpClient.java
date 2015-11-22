@@ -1,39 +1,32 @@
-package schliep.bitcoin.http;
+package exchange.Clients.http;
 
 import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelPipeline;
-import io.netty.channel.EventLoopGroup;
+import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.*;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.util.AttributeKey;
+import java.net.*;
 
-import javax.net.ssl.SSLException;
-import java.net.URI;
-import java.net.URISyntaxException;
+/*
+ * Author: Schliep
+ */
 
-public class HttpClient {
 
+public class NettyHttpClient {
+    
     private final Bootstrap bootstrap;
     private final EventLoopGroup group;
-
-    public HttpClient() throws SSLException {
+    
+    public NettyHttpClient(){
         bootstrap = new Bootstrap();
-
         group = new NioEventLoopGroup();
-
         bootstrap.group(group).channel(NioSocketChannel.class).handler(new HttpClientInitializer());
     }
-
+    
     public void get(String url) throws URISyntaxException, InterruptedException {
-
         URI uri = new URI(url);
-
+        
         String host = uri.getHost();
         int port = uri.getPort();
         if(port < 0){
@@ -47,52 +40,28 @@ public class HttpClient {
         request.headers().set(HttpHeaders.Names.ACCEPT_ENCODING, HttpHeaders.Values.GZIP);
 
         Channel ch = bootstrap.connect(host, port).sync().channel();
-
         ch.writeAndFlush(request);
-
-        ch.closeFuture().sync();
+        ch.closeFuture().sync(); 
     }
-
+    
     public void shutdown(){
         group.shutdownGracefully();
     }
-
-
-    public static void main(String[] args) throws SSLException {
-        HttpClient client = new HttpClient();
-
-        try {
-            client.get("http://google.com");
-            client.get("http://example.com");
-        } catch (URISyntaxException e) {
-            e.printStackTrace();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        finally {
-            client.shutdown();
-        }
-
-    }
-
+    
+    
     private class HttpClientInitializer extends ChannelInitializer<SocketChannel>{
 
         private static final int MAX_LENGTH = 1048576;
 
         @Override
         protected void initChannel(SocketChannel channel) throws Exception {
-
             ChannelPipeline pipeline = channel.pipeline();
-
             pipeline.addLast(new HttpClientCodec());
-
             pipeline.addLast(new HttpContentDecompressor());
-
             pipeline.addLast(new HttpObjectAggregator(MAX_LENGTH));
-
-            pipeline.addLast(new HttpClientHandler());
+            pipeline.addLast(new NettyHttpClientHandler());
 
         }
     }
-
+    
 }
