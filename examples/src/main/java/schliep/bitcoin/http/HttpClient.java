@@ -9,7 +9,11 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.*;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.util.AttributeKey;
 
+import javax.net.ssl.SSLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 
@@ -18,7 +22,7 @@ public class HttpClient {
     private final Bootstrap bootstrap;
     private final EventLoopGroup group;
 
-    public HttpClient(){
+    public HttpClient() throws SSLException {
         bootstrap = new Bootstrap();
 
         group = new NioEventLoopGroup();
@@ -54,7 +58,7 @@ public class HttpClient {
     }
 
 
-    public static void main(String[] args){
+    public static void main(String[] args) throws SSLException {
         HttpClient client = new HttpClient();
 
         try {

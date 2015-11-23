@@ -9,16 +9,22 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.http.websocketx.PingWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketFrame;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.util.AttributeKey;
 
 import javax.net.ssl.SSLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 
 public class WebSocketClient {
+
+
+    public static final AttributeKey<String> HOST_KEY = AttributeKey.newInstance("HOST");
+    public static final AttributeKey<Integer> PORT_KEY = AttributeKey.newInstance("PORT");
 
     private final Bootstrap bootstrap;
     private final EventLoopGroup group;
@@ -27,8 +33,6 @@ public class WebSocketClient {
 
     private URI uri;
 
-    private EchoWebSocketHandler echoHandler = new EchoWebSocketHandler();
-
     public WebSocketClient() throws URISyntaxException, SSLException {
         uri = new URI(EchoWebSocketHandler.ECHO_URI);
 
@@ -36,7 +40,7 @@ public class WebSocketClient {
 
         group = new NioEventLoopGroup();
 
-        bootstrap.group(group).channel(NioSocketChannel.class).handler(new EchoWebSocketClientInitializer(uri, echoHandler));
+        bootstrap.group(group).channel(NioSocketChannel.class).handler(new EchoWebSocketClientInitializer());
     }
 
     public void connect() throws URISyntaxException, InterruptedException {
@@ -46,13 +50,18 @@ public class WebSocketClient {
             port = 443;
         }
 
+        bootstrap.attr(HOST_KEY, host);
+        bootstrap.attr(PORT_KEY, port);
+
         channel = bootstrap.connect(host, port).sync().channel();
 
-        echoHandler.handshakeFuture().sync();
+        EchoWebSocketHandler temp = channel.pipeline().get(EchoWebSocketHandler.class);
+
+        temp.handshakeFuture().sync();
     }
 
     public void send(String text){
-        WebSocketFrame frame = new TextWebSocketFrame("testing...");
+        WebSocketFrame frame = new TextWebSocketFrame(text);
         System.out.printf("Sending: %s\n", text);
         channel.writeAndFlush(frame);
 
@@ -69,6 +78,7 @@ public class WebSocketClient {
         try {
             client.connect();
             client.send("testing...");
+            client.send("boop");
             Thread.sleep(1000);
         } catch (URISyntaxException e) {
             e.printStackTrace();
@@ -84,21 +94,10 @@ public class WebSocketClient {
     private class EchoWebSocketClientInitializer extends ChannelInitializer<SocketChannel>{
 
         private static final int MAX_LENGTH = 1048576;
-
-        private final EchoWebSocketHandler handler;
-        private final String host;
-        private int port;
         private final SslContext sslCtx;
 
-        public EchoWebSocketClientInitializer(URI uri, EchoWebSocketHandler handler) throws URISyntaxException, SSLException {
-            this.handler = handler;
+        public EchoWebSocketClientInitializer() throws URISyntaxException, SSLException {
             this.sslCtx = SslContextBuilder.forClient().build();
-
-            host = uri.getHost();
-            port = uri.getPort();
-            if(port < 0){
-                port = 443;
-            }
         }
 
 
@@ -107,7 +106,9 @@ public class WebSocketClient {
 
             ChannelPipeline pipeline = channel.pipeline();
 
-            SslContext sslCtx = SslContextBuilder.forClient().build();
+            String host = channel.attr(WebSocketClient.HOST_KEY).get();
+            int port = channel.attr(WebSocketClient.PORT_KEY).get();
+
 
             pipeline.addLast(sslCtx.newHandler(channel.alloc(), host, port));
 
@@ -117,7 +118,7 @@ public class WebSocketClient {
 
             pipeline.addLast(new HttpObjectAggregator(MAX_LENGTH));
 
-            pipeline.addLast(handler);
+            pipeline.addLast(new EchoWebSocketHandler());
         }
     }
 

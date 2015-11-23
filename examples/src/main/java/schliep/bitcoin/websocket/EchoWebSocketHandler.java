@@ -54,13 +54,6 @@ public class EchoWebSocketHandler extends SimpleChannelInboundHandler<Object> {
             return;
         }
 
-        if (msg instanceof FullHttpResponse) {
-            FullHttpResponse response = (FullHttpResponse) msg;
-            throw new IllegalStateException(
-                    "Unexpected FullHttpResponse (getStatus=" + response.getStatus() +
-                            ", content=" + response.content().toString(Charset.defaultCharset()) + ')');
-        }
-
         WebSocketFrame frame = (WebSocketFrame) msg;
         if (frame instanceof TextWebSocketFrame) {
             TextWebSocketFrame textFrame = (TextWebSocketFrame) frame;
