@@ -1,8 +1,6 @@
 package exchange;
 
-import exchange.Clients.http.NettyHttpClient;
 import exchange.Parsers.BTCEParser;
-import java.net.*;
 import java.util.concurrent.LinkedBlockingQueue;
 
 

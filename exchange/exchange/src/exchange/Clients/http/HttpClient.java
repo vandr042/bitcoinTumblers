@@ -7,9 +7,10 @@ import java.io.*;
 public class HttpClient {
     
     public HttpClient(){
-        
+        //do nothing
     }
     
+    //Standard GET request call in Java
     public String getHypertext(String url){
         StringBuffer response = new StringBuffer();
         
