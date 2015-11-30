@@ -28,7 +28,7 @@ public class GetPool {
 		poolKeys = new HashSet<Address>();
 	}
 	
-	public boolean getInputs(Address addr) throws InterruptedException, ExecutionException, BlockStoreException{
+	private boolean getInputs(Address addr) throws InterruptedException, ExecutionException, BlockStoreException{
 		LinkedList<Transaction> outputTx = addrFinder.addrAsOutput(addr);
 		boolean newAddr = false;
 		for (Transaction tx:outputTx){
@@ -44,7 +44,7 @@ public class GetPool {
 		return newAddr;
 	}
 	
-	public boolean getOutputs(Address addr) throws InterruptedException, ExecutionException, BlockStoreException{
+	private boolean getOutputs(Address addr) throws InterruptedException, ExecutionException, BlockStoreException{
 		LinkedList<Transaction> inputTx = addrFinder.addrAsInput(addr);
 		boolean newAddr = false;
 		for (Transaction tx:inputTx){
@@ -60,9 +60,11 @@ public class GetPool {
 		return newAddr;
 	}
 	
-	public void buildPool(Address poolAddr) throws InterruptedException, ExecutionException, BlockStoreException{
+	public int buildPool(Address poolAddr) throws InterruptedException, ExecutionException, BlockStoreException{
 		this.getInputs(poolAddr);
+		int rounds = 0;
 		while (newDKeys.size()!= 0){
+			rounds++;
 			newPKeys = new LinkedList<Address>();
 			for (Address dkey:newDKeys){
 				this.getOutputs(dkey);
@@ -76,11 +78,19 @@ public class GetPool {
 				break;
 			}
 		}
+		return rounds;
+	}
+	
+	public HashSet<Address> getDepositKeys(){
+		return depKeys;
+	}
+	public HashSet<Address> getPoolKeys(){
+		return poolKeys;
 	}
 	
 	public static void main(String[] args) throws AddressFormatException, InterruptedException, ExecutionException, BlockStoreException {
 		GetPool poolBuilder = new GetPool();
 		Address addr = new Address(params, args[0]);
-		poolBuilder.buildPool(addr);
+		int rounds = poolBuilder.buildPool(addr);
 	}
 }
