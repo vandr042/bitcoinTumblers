@@ -143,7 +143,7 @@ public class AddressFinder {
 	 * list of transaction in which that address 
 	 * appears as an output.
 	 */
-	public LinkedList<Transaction> addrAsOutput(Address addr) throws InterruptedException, ExecutionException, BlockStoreException{
+	public LinkedList<Transaction> addrAsOutput(LinkedList<Address> addr) throws InterruptedException, ExecutionException, BlockStoreException{
 		
 		LinkedList<Transaction> tx_appears = new LinkedList<Transaction>();
 		StoredBlock stored_block = this.getStoredBlock();
@@ -170,19 +170,25 @@ public class AddressFinder {
 				List<TransactionOutput> tx_olist = tx.getOutputs();
 				for (TransactionOutput tx_o : tx_olist) {
 					Address o_addr = tx_o.getAddressFromP2PKHScript(params);
-					/*
-					 * if it appears then add to list
-					 */
-					if (o_addr != null && o_addr.toString().equals(addr.toString())) {
-						tx_appears.add(tx);
-						break;
-					} else {
-						o_addr = tx_o.getAddressFromP2SH(params);
-						if (o_addr != null && o_addr.toString().equals(addr.toString())) {
+					boolean added = false;
+					
+					/* modified to check if any address from input list appears in transaction */
+					for (Address address: addr){
+						if (o_addr != null && o_addr.toString().equals(address.toString())) {
 							tx_appears.add(tx);
+							added = true;
 							break;
+						} else {
+							o_addr = tx_o.getAddressFromP2SH(params);
+							if (o_addr != null && o_addr.toString().equals(address.toString())) {
+								tx_appears.add(tx);
+								added = true;
+								break;
+							}
 						}
 					}
+					if (added == true)
+						break;
 				}
 			}
 			stored_block = stored_block.getPrev(this.kit.store());
@@ -199,7 +205,7 @@ public class AddressFinder {
 	 *  transactions in which that address appears
 	 *  as an input.
 	 */
-public LinkedList<Transaction> addrAsInput(Address addr) throws InterruptedException, ExecutionException, BlockStoreException{
+public LinkedList<Transaction> addrAsInput(LinkedList<Address> addr) throws InterruptedException, ExecutionException, BlockStoreException{
 		
 		LinkedList<Transaction> tx_appears = new LinkedList<Transaction>();
 		StoredBlock stored_block = this.getStoredBlock();
@@ -225,18 +231,26 @@ public LinkedList<Transaction> addrAsInput(Address addr) throws InterruptedExcep
 
 				/* iterate over input and look for address */
 				for (TransactionInput tx_input : tx_ilist) {
+					boolean added = false;
 					try {
 						Address in_Addr = tx_input.getFromAddress();
-						if (in_Addr.toString().equals(addr.toString())) { //if it appears then add to list
-							tx_appears.add(tx);
-							break;
+						
+						/* modified this to loop through address list and add transactions in which any of the addresses appear */
+						for (Address address: addr){
+							if (in_Addr.toString().equals(address.toString())) { //if it appears then add to list
+								tx_appears.add(tx);
+								added = true;
+								break;
+							}
 						}
+						
 
 					} catch (ScriptException e) {
 						exceptionCount++; //num exceptions
 						break;
 					}
-
+					if (added == true)
+						break;
 				}
 			}
 			

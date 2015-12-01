@@ -28,8 +28,8 @@ public class GetPool {
 	}
 	
 	/* takes in pool address and an a list as an argument and updates depKeys with new deposit keys */
-	private LinkedList<Address> getInputs(Address addr, LinkedList<Address> newDKeys) throws InterruptedException, ExecutionException, BlockStoreException{
-		LinkedList<Transaction> outputTx = addrFinder.addrAsOutput(addr);
+	private LinkedList<Address> getInputs(LinkedList<Address> addrList, LinkedList<Address> newDKeys) throws InterruptedException, ExecutionException, BlockStoreException{
+		LinkedList<Transaction> outputTx = addrFinder.addrAsOutput(addrList);
 		for (Transaction tx:outputTx){
 			List<TransactionInput> txInputs = tx.getInputs();
 			for (TransactionInput txi:txInputs){
@@ -43,8 +43,8 @@ public class GetPool {
 	}
 	
 	/* takes in deposit key as an argument and finds all of the pool keys known */
-	private LinkedList<Address> getOutputs(Address addr, LinkedList<Address> newPKeys) throws InterruptedException, ExecutionException, BlockStoreException{
-		LinkedList<Transaction> inputTx = addrFinder.addrAsInput(addr);
+	private LinkedList<Address> getOutputs(LinkedList<Address> addrList, LinkedList<Address> newPKeys) throws InterruptedException, ExecutionException, BlockStoreException{
+		LinkedList<Transaction> inputTx = addrFinder.addrAsInput(addrList);
 		for (Transaction tx:inputTx){
 			List<TransactionOutput> txOutputs = tx.getOutputs();
 			for (TransactionOutput txo:txOutputs){
@@ -68,22 +68,22 @@ public class GetPool {
 	 */
 	public int buildPool(Address poolAddr) throws InterruptedException, ExecutionException, BlockStoreException{
 		LinkedList <Address> newDKeys = new LinkedList<Address>();
-		getInputs(poolAddr, newDKeys);
+		LinkedList <Address> newPKeys = new LinkedList<Address>();
+		newPKeys.add(poolAddr);
+		getInputs(newPKeys, newDKeys);
 		int rounds = 0;
 		long currTime = System.currentTimeMillis();
 		while (System.currentTimeMillis() - currTime < 600000){
 			rounds++;
-			LinkedList<Address> newPKeys = new LinkedList<Address>();
-			for (Address dkey:newDKeys){
-				this.getOutputs(dkey, newPKeys);
+			while (newPKeys.isEmpty() == false){ //empty newPKeys
+				newPKeys.removeFirst();
 			}
-			if (newPKeys.size() != 0){
-				while(newDKeys.isEmpty() == false){
+			this.getOutputs(newDKeys, newPKeys);
+			if (newPKeys.size() != 0){ 
+				while(newDKeys.isEmpty() == false){ //empty newDKeys
 					newDKeys.removeFirst();
 				}
-				for (Address pkey:newPKeys){
-					this.getInputs(pkey,newDKeys);
-				}
+				this.getInputs(newPKeys,newDKeys);
 			}else{
 				break;
 			}
