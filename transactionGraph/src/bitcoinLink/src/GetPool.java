@@ -6,6 +6,7 @@ import java.util.concurrent.ExecutionException;
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.AddressFormatException;
 import org.bitcoinj.core.NetworkParameters;
+import org.bitcoinj.core.ScriptException;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.TransactionInput;
 import org.bitcoinj.core.TransactionOutput;
@@ -17,8 +18,6 @@ public class GetPool {
 	private AddressFinder addrFinder;
 	private HashSet<Address> depKeys;
 	private HashSet<Address> poolKeys;
-	private LinkedList<Address> newPKeys;
-	private LinkedList<Address> newDKeys;
 	private static NetworkParameters params;
 	
 	public GetPool(){
@@ -28,51 +27,56 @@ public class GetPool {
 		poolKeys = new HashSet<Address>();
 	}
 	
-	private boolean getInputs(Address addr) throws InterruptedException, ExecutionException, BlockStoreException{
+	private LinkedList<Address> getInputs(Address addr, LinkedList<Address> newDKeys) throws InterruptedException, ExecutionException, BlockStoreException{
 		LinkedList<Transaction> outputTx = addrFinder.addrAsOutput(addr);
-		boolean newAddr = false;
 		for (Transaction tx:outputTx){
-			LinkedList<TransactionInput> txInputs = (LinkedList<TransactionInput>) tx.getInputs();
+			List<TransactionInput> txInputs = tx.getInputs();
 			for (TransactionInput txi:txInputs){
 				boolean added = depKeys.add(txi.getFromAddress());
 				if (added == true){
 					newDKeys.add(txi.getFromAddress());
-					newAddr = true;
 				}
 			}
 		}
-		return newAddr;
+		return newDKeys;
 	}
 	
-	private boolean getOutputs(Address addr) throws InterruptedException, ExecutionException, BlockStoreException{
+	private LinkedList<Address> getOutputs(Address addr, LinkedList<Address> newPKeys) throws InterruptedException, ExecutionException, BlockStoreException{
 		LinkedList<Transaction> inputTx = addrFinder.addrAsInput(addr);
-		boolean newAddr = false;
 		for (Transaction tx:inputTx){
-			LinkedList<TransactionOutput> txOutputs = (LinkedList<TransactionOutput>) tx.getOutputs();
+			List<TransactionOutput> txOutputs = tx.getOutputs();
 			for (TransactionOutput txo:txOutputs){
-				boolean added = poolKeys.add(txo.getAddressFromP2PKHScript(params));
+				boolean added;
+				try{ 
+					added = poolKeys.add(txo.getAddressFromP2PKHScript(params));
+				}catch (ScriptException e){
+					added = poolKeys.add(txo.getAddressFromP2SH(params));
+				}
 				if (added = true){
 					newPKeys.add(txo.getAddressFromP2PKHScript(params));
-					newAddr = true;
 				}
 			}
 		}
-		return newAddr;
+		return newPKeys;
 	}
 	
 	public int buildPool(Address poolAddr) throws InterruptedException, ExecutionException, BlockStoreException{
-		this.getInputs(poolAddr);
+		LinkedList <Address> newDKeys = new LinkedList<Address>();
+		getInputs(poolAddr, newDKeys);
 		int rounds = 0;
-		while (newDKeys.size()!= 0){
+		long currTime = System.currentTimeMillis();
+		while (System.currentTimeMillis() - currTime < 600000){
 			rounds++;
-			newPKeys = new LinkedList<Address>();
+			LinkedList<Address> newPKeys = new LinkedList<Address>();
 			for (Address dkey:newDKeys){
-				this.getOutputs(dkey);
+				this.getOutputs(dkey, newPKeys);
 			}
 			if (newPKeys.size() != 0){
-				newDKeys = new LinkedList<Address>();
+				while(newDKeys.isEmpty() == false){
+					newDKeys.removeFirst();
+				}
 				for (Address pkey:newPKeys){
-					this.getInputs(pkey);
+					this.getInputs(pkey,newDKeys);
 				}
 			}else{
 				break;
@@ -92,5 +96,9 @@ public class GetPool {
 		GetPool poolBuilder = new GetPool();
 		Address addr = new Address(params, args[0]);
 		int rounds = poolBuilder.buildPool(addr);
+		System.out.println(rounds);
+		System.out.println(poolBuilder.poolKeys);
+		System.out.println(poolBuilder.depKeys);
+		
 	}
 }
