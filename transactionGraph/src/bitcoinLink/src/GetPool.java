@@ -27,6 +27,7 @@ public class GetPool {
 		poolKeys = new HashSet<Address>();
 	}
 	
+	/* takes in pool address and an a list as an argument and updates depKeys with new deposit keys */
 	private LinkedList<Address> getInputs(Address addr, LinkedList<Address> newDKeys) throws InterruptedException, ExecutionException, BlockStoreException{
 		LinkedList<Transaction> outputTx = addrFinder.addrAsOutput(addr);
 		for (Transaction tx:outputTx){
@@ -41,6 +42,7 @@ public class GetPool {
 		return newDKeys;
 	}
 	
+	/* takes in deposit key as an argument and finds all of the pool keys known */
 	private LinkedList<Address> getOutputs(Address addr, LinkedList<Address> newPKeys) throws InterruptedException, ExecutionException, BlockStoreException{
 		LinkedList<Transaction> inputTx = addrFinder.addrAsInput(addr);
 		for (Transaction tx:inputTx){
@@ -60,6 +62,10 @@ public class GetPool {
 		return newPKeys;
 	}
 	
+	/* takes in a pool key and builds sets of pool keys and deposit keys
+	 * by calling getOutputs and getInputs until no new pool keys
+	 * or deposit keys are found. 
+	 */
 	public int buildPool(Address poolAddr) throws InterruptedException, ExecutionException, BlockStoreException{
 		LinkedList <Address> newDKeys = new LinkedList<Address>();
 		getInputs(poolAddr, newDKeys);
