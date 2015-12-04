@@ -1,6 +1,7 @@
 package exchange;
 
 import exchange.Parsers.BTCEParser;
+import exchange.Parsers.BitfinexParser;
 import java.util.concurrent.LinkedBlockingQueue;
 
 
@@ -17,6 +18,8 @@ public final class Exchange {
         BTCEParser btceparser = new BTCEParser(trades);
         btceparser.btce_parser.start();
         btceparser.run();
+        
+        BitfinexParser bfp = new BitfinexParser(trades);
         
     }
 }
