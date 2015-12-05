@@ -43,19 +43,9 @@ public class Serializer implements Runnable{
     
     @Override
     public void run() {
-        
         while(trade_serializer == Thread.currentThread()){
-            
             SerializeTrades();
-            try{
-                Thread.sleep(1);
-            }
-            catch (InterruptedException e){
-                e.printStackTrace();
-            } 
-            
-        }
-         
+        } 
     }
     
     

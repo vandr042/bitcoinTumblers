@@ -15,10 +15,10 @@ import io.netty.handler.codec.http.websocketx.WebSocketFrame;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.util.AttributeKey;
-
 import javax.net.ssl.SSLException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import exchange.Parsers.Parser;
 
 public class WebSocketClient {
 
@@ -30,11 +30,11 @@ public class WebSocketClient {
     private Channel channel;
     private URI uri;
 
-    public WebSocketClient(String URL) throws URISyntaxException, SSLException {
-        uri = new URI(URL);
+    public WebSocketClient(String url, Parser p) throws URISyntaxException, SSLException {
+        uri = new URI(url);
         bootstrap = new Bootstrap();
         group = new NioEventLoopGroup();
-        bootstrap.group(group).channel(NioSocketChannel.class).handler(new EchoWebSocketClientInitializer());
+        bootstrap.group(group).channel(NioSocketChannel.class).handler(new EchoWebSocketClientInitializer(p));
     }
 
     public void connect() throws URISyntaxException, InterruptedException {
@@ -52,7 +52,7 @@ public class WebSocketClient {
 
     public void send(String text){
         WebSocketFrame frame = new TextWebSocketFrame(text);
-        System.out.printf("Sending: %s\n", text);
+        //System.out.printf("Sending: %s\n", text);
         channel.writeAndFlush(frame);
     }
 
@@ -65,8 +65,10 @@ public class WebSocketClient {
 
         private static final int MAX_LENGTH = 1048576;
         private final SslContext sslCtx;
+        private Parser parser = null;
 
-        public EchoWebSocketClientInitializer() throws URISyntaxException, SSLException {
+        public EchoWebSocketClientInitializer(Parser p) throws URISyntaxException, SSLException {
+            this.parser = p;
             this.sslCtx = SslContextBuilder.forClient().build();
         }
 
@@ -81,7 +83,7 @@ public class WebSocketClient {
             pipeline.addLast(new HttpClientCodec());
             pipeline.addLast(new HttpContentDecompressor());
             pipeline.addLast(new HttpObjectAggregator(MAX_LENGTH));
-            pipeline.addLast(new EchoWebSocketHandler(uri.toString()));
+            pipeline.addLast(new EchoWebSocketHandler(uri.toString(), this.parser));
         }
     }
 

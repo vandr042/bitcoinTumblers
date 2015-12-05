@@ -1,0 +1,47 @@
+/*if(data.startsWith("{\"event")){
+            return;
+        }
+
+        InputStream stream = new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8));
+        JSONTokener tokener = new JSONTokener(stream);
+        JSONArray array = new JSONArray(tokener);
+        
+        if(array.get(1).equals("hb")){
+            System.out.println("Wat");  
+            return;
+        }
+        
+        System.out.println(array.get(1));
+        array = (JSONArray)array.get(1);
+        JSONArray temp;
+        
+        //Loop through each trade in array
+        for(int i = 0; i < array.length(); i++){
+            temp = (JSONArray)array.get(i);
+            
+            //Create Trade Object
+            if(temp.get(3).toString().startsWith("-")){
+                Trade a = new Trade("Sell", 
+                                    temp.get(0).toString().substring(temp.get(0).toString().length()-6, temp.get(0).toString().length()), 
+                                    temp.get(0).toString().substring(temp.get(0).toString().length()-6, temp.get(0).toString().length()),
+                                    "BITFINEX",
+                                    Double.parseDouble(temp.get(2).toString()),
+                                    Double.parseDouble(temp.get(3).toString().replace("-", "")),
+                                    temp.get(1).toString(),
+                                    temp.get(0).toString());
+                //Put Trade object inside our queue
+                trades.put(a);
+            }
+            else{
+                Trade a = new Trade("Buy", 
+                                    temp.get(0).toString().substring(temp.get(0).toString().length()-6, temp.get(0).toString().length()), 
+                                    temp.get(0).toString().substring(temp.get(0).toString().length()-6, temp.get(0).toString().length()),
+                                    "BITFINEX",
+                                    Double.parseDouble(temp.get(2).toString()),
+                                    Double.parseDouble(temp.get(3).toString().replace("-", "")),
+                                    temp.get(1).toString(),
+                                    temp.get(0).toString());
+                //Put Trade object inside our queue
+                trades.put(a);
+            }
+        }//Close  Loop*/
