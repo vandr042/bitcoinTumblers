@@ -8,23 +8,24 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.LinkedBlockingQueue;
 
 
-public class BitfinexParser implements Parser{
+public class PoloniexParser implements Parser{
     
     LinkedBlockingQueue<Trade> trades;
 
-    public BitfinexParser(LinkedBlockingQueue<Trade> queue){
+    public PoloniexParser(LinkedBlockingQueue<Trade> queue){
         this.trades = queue; //Pass reference to our main queue into varible "trades"
     }
 
     @Override
-    public void parse(String data) throws InterruptedException, JSONException, NumberFormatException{
-        if(data.startsWith("{")){
+    public void parse(String data) throws Exception{
+        System.out.println(data);
+        /*if(data.startsWith("{")){
             return;
         }
         if(data.contains("hb")){
             return;
         }
-        //Only for the first data dump received from BITFINEX, all subsequent trades go to the else...
+        
         if(data.contains(",[[")){
             InputStream stream = new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8));
             JSONTokener tokener = new JSONTokener(stream);
@@ -94,7 +95,7 @@ public class BitfinexParser implements Parser{
                 //Put Trade object inside our queue
                 trades.put(a);
             }
-        }//Close Else   
+        }//Close Else */  
     }//Close Function
   
 }
