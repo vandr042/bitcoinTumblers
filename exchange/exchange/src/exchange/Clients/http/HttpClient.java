@@ -50,7 +50,7 @@ public class HttpClient implements Runnable{
             
             try{
             System.out.println("Sleeping");
-            Thread.sleep(30000);
+            Thread.sleep(10000);
             }
             catch(InterruptedException e){
                e.printStackTrace();
