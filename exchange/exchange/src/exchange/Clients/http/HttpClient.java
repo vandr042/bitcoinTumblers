@@ -2,20 +2,27 @@ package exchange.Clients.http;
 
 import java.net.*;
 import java.io.*;
+import exchange.Parsers.Parser;
 
 
-public class HttpClient {
+public class HttpClient implements Runnable{
     
-    public HttpClient(){
-        //do nothing
+    private final String URL;
+    public Thread worker;
+    private Parser parser = null;
+    
+    public HttpClient(String url, Parser p){
+        URL = url;
+        parser = p;
+        worker = new Thread(this); 
     }
     
     //Standard GET request call in Java
-    public String getHypertext(String url){
+    private String getHypertext(){
         StringBuffer response = new StringBuffer();
         
         try{
-            URL obj = new URL(url);
+            URL obj = new URL(URL);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
                 con.setRequestMethod("GET");
             BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
@@ -29,6 +36,26 @@ public class HttpClient {
             e.printStackTrace();
         }
         return response.toString();
+    }
+
+    @Override
+    public void run() {
+        while(Thread.currentThread() == this.worker){
+            try{
+                parser.parse(this.getHypertext());
+            }
+            catch(Exception e){
+                e.printStackTrace();
+            }
+            
+            try{
+            System.out.println("Sleeping");
+            Thread.sleep(10000);
+            }
+            catch(InterruptedException e){
+               e.printStackTrace();
+            }
+        }
     }
     
 }

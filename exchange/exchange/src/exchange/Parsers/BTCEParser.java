@@ -1,65 +1,70 @@
 package exchange.Parsers;
 
-import java.io.*;
 import org.json.*;
 import exchange.Trade;
-import exchange.Clients.http.HttpClient;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.util.*;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.LinkedBlockingQueue;
 
 
-public class BTCEParser implements Runnable{
+public class BTCEParser implements Parser{
     
-    
-    // <editor-fold defaultstate="collapsed" desc="HTTP Variables">
-    private final String url = "https://btc-e.com/api/3/trades/btc_usd-btc_rur-btc_eur-ltc_btc-ltc_usd-ltc_rur-ltc_eur-nmc_btc-nmc_usd-nvc_btc-nvc_usd-usd_rur-eur_usd-eur_rur-ppc_btc-ppc_usd?limit=150";
-    private final HttpClient http;
-    private String hypertext = "";
-    // </editor-fold>
-    
-    // <editor-fold defaultstate="collapsed" desc="Threading Variables">
     LinkedBlockingQueue<Trade> trades;
-    public Thread btce_parser;
-    // </editor-fold>
-    
+    Map allTimeHighest = new HashMap();
+    Map currentHighest = new HashMap();
+    String[] symbpairs = {"btc_usd", "btc_rur", "btc_eur", "ltc_btc", "ltc_usd", "ltc_rur", "ltc_eur", "nmc_btc", "nmc_usd", "nvc_btc", "nvc_usd", "usd_rur", "eur_usd", "eur_rur", "ppc_btc", "ppc_usd"};
+
     
     public BTCEParser(LinkedBlockingQueue<Trade> queue){
+        this.trades = queue; //Pass reference to our main queue into varible "trades"
         
-        //Pass reference to our main queue into varible "trades"
-        this.trades = queue;
-        //Instantiate the HTTPClient()
-        http = new HttpClient(); 
-        //Initialize Parser Thread for BTC-E
-        btce_parser = new Thread(this);
+        allTimeHighest.put("btc_usd", 0);
+        allTimeHighest.put("btc_rur", 0);
+        allTimeHighest.put("btc_eur", 0);
+        allTimeHighest.put("ltc_btc", 0);
+        allTimeHighest.put("ltc_usd", 0);
+        allTimeHighest.put("ltc_rur", 0);
+        allTimeHighest.put("ltc_eur", 0);
+        allTimeHighest.put("nmc_btc", 0);
+        allTimeHighest.put("nmc_usd", 0);
+        allTimeHighest.put("nvc_btc", 0);
+        allTimeHighest.put("nvc_usd", 0);
+        allTimeHighest.put("usd_rur", 0);
+        allTimeHighest.put("eur_usd", 0);
+        allTimeHighest.put("eur_rur", 0);
+        allTimeHighest.put("ppc_btc", 0);
+        allTimeHighest.put("ppc_usd", 0);
         
+        currentHighest.put("btc_usd", 0);
+        currentHighest.put("btc_rur", 0);
+        currentHighest.put("btc_eur", 0);
+        currentHighest.put("ltc_btc", 0);
+        currentHighest.put("ltc_usd", 0);
+        currentHighest.put("ltc_rur", 0);
+        currentHighest.put("ltc_eur", 0);
+        currentHighest.put("nmc_btc", 0);
+        currentHighest.put("nmc_usd", 0);
+        currentHighest.put("nvc_btc", 0);
+        currentHighest.put("nvc_usd", 0);
+        currentHighest.put("usd_rur", 0);
+        currentHighest.put("eur_usd", 0);
+        currentHighest.put("eur_rur", 0);
+        currentHighest.put("ppc_btc", 0);
+        currentHighest.put("ppc_usd", 0);
     }
-    
+
     @Override
-    public void run() {
-        
-        while(Thread.currentThread() == btce_parser){
-            
-            try{
-                hypertext = http.getHypertext(url); //Make GET Request
-                parse(hypertext);
-                Thread.sleep(5000); //Execute every 5 seconds
-             } catch (Exception e){
-                e.printStackTrace();
-            }
-            
-        }  
-        
-    }
-    
-    
-    public void parse(String hypertext) throws Exception{
-        
-        InputStream stream = new ByteArrayInputStream(hypertext.getBytes(StandardCharsets.UTF_8));
+    public void parse(String data) throws InterruptedException, JSONException, NumberFormatException{
+        int serialized = 0;
+        System.out.println("BTCE");
+        InputStream stream = new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8));
         JSONTokener tokener = new JSONTokener(stream);
         JSONObject root = new JSONObject(tokener);
         JSONObject temp;
-        
-        //Loop through all 16 Symbol Pairs
+
+        //Loop through the Symbol Pair
         for(int i = 0; i < root.names().length(); i++){
             //Loop through each trade of the given Symbol Pair
             for(int j = 0; j < ((JSONArray)root.get(root.names().get(i).toString())).length(); j++){
@@ -67,20 +72,30 @@ public class BTCEParser implements Runnable{
                 //Store the current JSON trade in "temp"
                 temp = ((JSONObject)(((JSONArray)root.get(root.names().get(i).toString())).get(j)));
                 
-                //Create a Trade object
-                Trade a = new Trade(temp.get("type").toString(), 
-                                    root.names().get(i).toString(), 
-                                    root.names().get(i).toString(),
-                                    "BTC-E",
-                                    Double.parseDouble(temp.get("price").toString()),
-                                    Double.parseDouble(temp.get("amount").toString()),
-                                    temp.get("timestamp").toString(),
-                                    temp.get("tid").toString());
-                //Put Trade object inside our queue
-                trades.put(a);
+                if(Long.parseLong(temp.get("tid").toString()) > Long.parseLong(allTimeHighest.get(root.names().get(i).toString()).toString())){
+                    if(Long.parseLong(temp.get("tid").toString()) > Long.parseLong(currentHighest.get(root.names().get(i).toString()).toString()))
+                        currentHighest.replace(root.names().get(i).toString(), Long.parseLong(temp.get("tid").toString()));
+                    //Create a Trade object
+                    Trade a = new Trade(temp.get("type").toString(), 
+                                        root.names().get(i).toString(), 
+                                        root.names().get(i).toString(),
+                                        "BTC-E",
+                                        Double.parseDouble(temp.get("price").toString()),
+                                        Double.parseDouble(temp.get("amount").toString()),
+                                        temp.get("timestamp").toString(),
+                                        temp.get("tid").toString());
+                    //Put Trade object inside our queue
+                    trades.put(a);
+                    serialized++;
+                }
             }//Close Inner Loop
         }//Close Outer Loop
-        
+        for (String symbpair : symbpairs) {
+            if (Long.parseLong(currentHighest.get(symbpair).toString()) > Long.parseLong(allTimeHighest.get(symbpair).toString())) {
+                allTimeHighest.replace(symbpair, Long.parseLong(currentHighest.get(symbpair).toString()));
+            }
+        }
+        System.out.println("Trades Serialized: " + serialized);
     }
-    
+  
 }
