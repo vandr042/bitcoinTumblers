@@ -80,21 +80,20 @@ public class GetPool {
 		LinkedList <Address> newDKeys = new LinkedList<Address>();
 		LinkedList <Address> newPKeys = new LinkedList<Address>();
 		newDKeys.add(depAddr);
+		dwriter.write(depAddr.toString());
 		getOutputs(newDKeys, newPKeys, pwriter);
 		int rounds = 0;
 		//long currTime = System.currentTimeMillis();
-		while (true){
+		while (newPKeys.size()!= 0){
 			rounds++;
-			while (newDKeys.isEmpty() == false){ //empty newPKeys
-				newDKeys.removeFirst();
-			}
+			newDKeys.clear();
 			this.getInputs(newPKeys, newDKeys, pwriter);
 			if (newDKeys.size() != 0){ 
-				while(newPKeys.isEmpty() == false){ //empty newDKeys
-					newPKeys.removeFirst();
-				}
-				this.getOutputs(newPKeys,newPKeys, dwriter);
+				newPKeys.clear();
+				this.getOutputs(newDKeys,newPKeys, dwriter);
 			}else{
+				System.out.println("newDKeys: " + newDKeys.size());
+				System.out.println("newPKeys: " + newPKeys.size());
 				break;
 			}
 		}
