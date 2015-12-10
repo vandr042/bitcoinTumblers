@@ -23,7 +23,7 @@ public class AddressFinder {
 	 * @throws InterruptedException
 	 */
 	private NetworkParameters params;
-	private static final int SEARCH_DEPTH = 100;
+	private static final int SEARCH_DEPTH = 57000;
 	private MaxBlockStore bstore;
 	private Block stored_block;
 
