@@ -1,5 +1,6 @@
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -23,7 +24,7 @@ public class GetPool {
 	private HashSet<Address> poolKeys;
 	private static NetworkParameters params;
 	
-	public GetPool(){
+	public GetPool() throws IOException, InterruptedException, ExecutionException{
 		params = MainNetParams.get();
 		addrFinder = new AddressFinder(params);
 		depKeys = new HashSet<Address>();
@@ -97,6 +98,7 @@ public class GetPool {
 				break;
 			}
 		}
+		addrFinder.done(); //terminates MaxBlockStore
 		return rounds;
 	}
 	
@@ -107,12 +109,12 @@ public class GetPool {
 		return poolKeys;
 	}
 	
-	public static void main(String[] args) throws AddressFormatException, InterruptedException, ExecutionException, BlockStoreException, FileNotFoundException {
+	public static void main(String[] args) throws AddressFormatException, InterruptedException, ExecutionException, BlockStoreException, IOException {
 		GetPool poolBuilder = new GetPool();
 		File f1 = new File("pkeys.txt");
-		PrintWriter pwriter = new PrintWriter("pkeys.txt");
+		PrintWriter pwriter = new PrintWriter(f1);
 		File f2 = new File("dkeys.txt");
-		PrintWriter dwriter = new PrintWriter("dkeys.txt");
+		PrintWriter dwriter = new PrintWriter(f2);
 		Address addr = new Address(params, args[0]);
 		int rounds = poolBuilder.buildPool(addr, pwriter, dwriter);
 		System.out.println(rounds);
