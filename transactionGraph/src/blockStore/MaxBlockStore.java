@@ -82,6 +82,10 @@ public class MaxBlockStore {
 			if (this.loadedFile != fileWanted.intValue()) {
 				this.loadDataFile(fileWanted.intValue());
 			}
+			if(!this.loadedBlocks.containsKey(blockHash)){
+				System.err.println("CORRUPTION IN BLOCK STORAGE, REPAIRING AT COST OF FRAGMENTATION");
+				return this.getBlockFromNet(blockHash);
+			}
 			return this.loadedBlocks.get(blockHash);
 		} else {
 			return this.getBlockFromNet(blockHash);
@@ -225,7 +229,7 @@ public class MaxBlockStore {
 
 		Sha256Hash headHash = self.getHeadOfChain();
 		Sha256Hash nextHash = headHash;
-		for (int counter = 0; counter < 35; counter++) {
+		for (int counter = 0; counter < 3000; counter++) {
 			Block tBlock = self.getBlock(nextHash);
 			System.out.println("" + tBlock.getTransactions().size() + " tx in block " + tBlock.getHashAsString());
 			nextHash = tBlock.getPrevBlockHash();
