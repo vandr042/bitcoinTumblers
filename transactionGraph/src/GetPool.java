@@ -115,7 +115,7 @@ public class GetPool {
 		PrintWriter pwriter = new PrintWriter(f1);
 		File f2 = new File("dkeys.txt");
 		PrintWriter dwriter = new PrintWriter(f2);
-		Address addr = new Address(params, args[0]);
+		Address addr = new Address(params, "1Q5WQKXZgSrbWoDv2PhGKuMwwaFCZ766zE");
 		int rounds = poolBuilder.buildPool(addr, pwriter, dwriter);
 		System.out.println(rounds);
 	}
