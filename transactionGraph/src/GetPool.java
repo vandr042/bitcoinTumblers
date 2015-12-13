@@ -1,3 +1,7 @@
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -20,7 +24,7 @@ public class GetPool {
 	private HashSet<Address> poolKeys;
 	private static NetworkParameters params;
 	
-	public GetPool(){
+	public GetPool() throws IOException, InterruptedException, ExecutionException{
 		params = MainNetParams.get();
 		addrFinder = new AddressFinder(params);
 		depKeys = new HashSet<Address>();
@@ -28,14 +32,16 @@ public class GetPool {
 	}
 	
 	/* takes in pool address and an a list as an argument and updates depKeys with new deposit keys */
-	private LinkedList<Address> getInputs(LinkedList<Address> addrList, LinkedList<Address> newDKeys) throws InterruptedException, ExecutionException, BlockStoreException{
+	private LinkedList<Address> getInputs(LinkedList<Address> addrList, LinkedList<Address> newDKeys, PrintWriter dwriter) throws InterruptedException, ExecutionException, BlockStoreException{
 		LinkedList<Transaction> outputTx = addrFinder.addrAsOutput(addrList);
 		for (Transaction tx:outputTx){
 			List<TransactionInput> txInputs = tx.getInputs();
 			for (TransactionInput txi:txInputs){
-				boolean added = depKeys.add(txi.getFromAddress());
+				Address addr = txi.getFromAddress();
+				boolean added = depKeys.add(addr);
 				if (added == true){
-					newDKeys.add(txi.getFromAddress());
+					dwriter.write(addr.toString());
+					newDKeys.add(addr);
 				}
 			}
 		}
@@ -43,18 +49,22 @@ public class GetPool {
 	}
 	
 	/* takes in deposit key as an argument and finds all of the pool keys known */
-	private LinkedList<Address> getOutputs(LinkedList<Address> addrList, LinkedList<Address> newPKeys) throws InterruptedException, ExecutionException, BlockStoreException{
+	private LinkedList<Address> getOutputs(LinkedList<Address> addrList, LinkedList<Address> newPKeys, PrintWriter pwriter) throws InterruptedException, ExecutionException, BlockStoreException{
 		LinkedList<Transaction> inputTx = addrFinder.addrAsInput(addrList);
 		for (Transaction tx:inputTx){
 			List<TransactionOutput> txOutputs = tx.getOutputs();
 			for (TransactionOutput txo:txOutputs){
 				boolean added;
+				Address addr;
 				try{ 
-					added = poolKeys.add(txo.getAddressFromP2PKHScript(params));
+					addr = (txo.getAddressFromP2PKHScript(params));
+					added = poolKeys.add(addr);
 				}catch (ScriptException e){
-					added = poolKeys.add(txo.getAddressFromP2SH(params));
+					addr = (txo.getAddressFromP2SH(params));
+					added = poolKeys.add(addr);
 				}
 				if (added = true){
+					pwriter.write(addr.toString());
 					newPKeys.add(txo.getAddressFromP2PKHScript(params));
 				}
 			}
@@ -66,28 +76,28 @@ public class GetPool {
 	 * by calling getOutputs and getInputs until no new pool keys
 	 * or deposit keys are found. 
 	 */
-	public int buildPool(Address poolAddr) throws InterruptedException, ExecutionException, BlockStoreException{
+	public int buildPool(Address depAddr,PrintWriter pwriter, PrintWriter dwriter) throws InterruptedException, ExecutionException, BlockStoreException{
 		LinkedList <Address> newDKeys = new LinkedList<Address>();
 		LinkedList <Address> newPKeys = new LinkedList<Address>();
-		newPKeys.add(poolAddr);
-		getInputs(newPKeys, newDKeys);
+		newDKeys.add(depAddr);
+		dwriter.write(depAddr.toString());
+		getOutputs(newDKeys, newPKeys, pwriter);
 		int rounds = 0;
-		long currTime = System.currentTimeMillis();
-		while (System.currentTimeMillis() - currTime < 600000){
+		//long currTime = System.currentTimeMillis();
+		while (newPKeys.size()!= 0){
 			rounds++;
-			while (newPKeys.isEmpty() == false){ //empty newPKeys
-				newPKeys.removeFirst();
-			}
-			this.getOutputs(newDKeys, newPKeys);
-			if (newPKeys.size() != 0){ 
-				while(newDKeys.isEmpty() == false){ //empty newDKeys
-					newDKeys.removeFirst();
-				}
-				this.getInputs(newPKeys,newDKeys);
+			newDKeys.clear();
+			this.getInputs(newPKeys, newDKeys, pwriter);
+			if (newDKeys.size() != 0){ 
+				newPKeys.clear();
+				this.getOutputs(newDKeys,newPKeys, dwriter);
 			}else{
+				System.out.println("newDKeys: " + newDKeys.size());
+				System.out.println("newPKeys: " + newPKeys.size());
 				break;
 			}
 		}
+		addrFinder.done(); //terminates MaxBlockStore
 		return rounds;
 	}
 	
@@ -98,13 +108,14 @@ public class GetPool {
 		return poolKeys;
 	}
 	
-	public static void main(String[] args) throws AddressFormatException, InterruptedException, ExecutionException, BlockStoreException {
+	public static void main(String[] args) throws AddressFormatException, InterruptedException, ExecutionException, BlockStoreException, IOException {
 		GetPool poolBuilder = new GetPool();
-		Address addr = new Address(params, args[0]);
-		int rounds = poolBuilder.buildPool(addr);
+		File f1 = new File("pkeys.txt");
+		PrintWriter pwriter = new PrintWriter(f1);
+		File f2 = new File("dkeys.txt");
+		PrintWriter dwriter = new PrintWriter(f2);
+		Address addr = new Address(params, "1Q5WQKXZgSrbWoDv2PhGKuMwwaFCZ766zE");
+		int rounds = poolBuilder.buildPool(addr, pwriter, dwriter);
 		System.out.println(rounds);
-		System.out.println(poolBuilder.poolKeys);
-		System.out.println(poolBuilder.depKeys);
-		
 	}
 }
