@@ -57,8 +57,8 @@ public class BTCEParser implements Parser{
 
     @Override
     public void parse(String data) throws InterruptedException, JSONException, NumberFormatException{
-        int serialized = 0;
-        System.out.println("BTCE");
+        
+        int serialized = 0; //Just a counter to display number of trades serialized.
         InputStream stream = new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8));
         JSONTokener tokener = new JSONTokener(stream);
         JSONObject root = new JSONObject(tokener);
@@ -72,6 +72,7 @@ public class BTCEParser implements Parser{
                 //Store the current JSON trade in "temp"
                 temp = ((JSONObject)(((JSONArray)root.get(root.names().get(i).toString())).get(j)));
                 
+                //Confirm this is not a duplicate trade
                 if(Long.parseLong(temp.get("tid").toString()) > Long.parseLong(allTimeHighest.get(root.names().get(i).toString()).toString())){
                     if(Long.parseLong(temp.get("tid").toString()) > Long.parseLong(currentHighest.get(root.names().get(i).toString()).toString()))
                         currentHighest.replace(root.names().get(i).toString(), Long.parseLong(temp.get("tid").toString()));
@@ -86,16 +87,18 @@ public class BTCEParser implements Parser{
                                         temp.get("tid").toString());
                     //Put Trade object inside our queue
                     trades.put(a);
-                    serialized++;
+                    serialized++; //Increment counter
                 }
             }//Close Inner Loop
         }//Close Outer Loop
+        
+        //Update highest TradeID
         for (String symbpair : symbpairs) {
             if (Long.parseLong(currentHighest.get(symbpair).toString()) > Long.parseLong(allTimeHighest.get(symbpair).toString())) {
                 allTimeHighest.replace(symbpair, Long.parseLong(currentHighest.get(symbpair).toString()));
             }
         }
-        System.out.println("Trades Serialized: " + serialized);
-    }
+        System.out.println("Serialized BTC-E Trades: " + serialized);
+    }//Close Function
   
 }

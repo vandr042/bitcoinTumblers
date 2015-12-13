@@ -39,6 +39,7 @@ public class EchoWebSocketHandler extends SimpleChannelInboundHandler<Object> {
     @Override
     public void channelInactive(ChannelHandlerContext ctx){
         System.out.println("WebSocket Client disconnected!");
+        System.exit(0);
     }
 
     @Override

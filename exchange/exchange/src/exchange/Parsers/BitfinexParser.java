@@ -18,13 +18,16 @@ public class BitfinexParser implements Parser{
 
     @Override
     public void parse(String data) throws InterruptedException, JSONException, NumberFormatException{
+        //If server sends a non-trade object, ignore
         if(data.startsWith("{")){
             return;
         }
+        //If server sends a heartbeat, ignore
         if(data.contains("hb")){
             return;
         }
-        //Only for the first data dump received from BITFINEX, all subsequent trades go to the else...
+        
+        //Only for the first data dump received from BITFINEX, all subsequent trades go to the "else"...
         if(data.contains(",[[")){
             InputStream stream = new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8));
             JSONTokener tokener = new JSONTokener(stream);
@@ -62,6 +65,7 @@ public class BitfinexParser implements Parser{
                     trades.put(a);
                 }
             }//Close  Loop
+          System.out.println("Serializing BITFINEX");
         }
         else{
             System.out.println("BITFINEX");
@@ -94,7 +98,8 @@ public class BitfinexParser implements Parser{
                 //Put Trade object inside our queue
                 trades.put(a);
             }
-        }//Close Else   
-    }//Close Function
+          System.out.println("Serializing BITFINEX");  
+        }//Close Else     
+    }
   
 }
