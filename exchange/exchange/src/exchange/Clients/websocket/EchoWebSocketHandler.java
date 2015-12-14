@@ -14,10 +14,12 @@ public class EchoWebSocketHandler extends SimpleChannelInboundHandler<Object> {
     private final WebSocketClientHandshaker handshaker;
     private ChannelPromise handshakeFuture;
     private Parser parser = null;
+    boolean isOrder = false;
 
-    public EchoWebSocketHandler(String URL, Parser p) throws URISyntaxException {
+    public EchoWebSocketHandler(String URL, Parser p, boolean isorder) throws URISyntaxException {
         URI uri = new URI(URL);
         this.parser = p;
+        this.isOrder = isorder;
         handshaker = WebSocketClientHandshakerFactory.newHandshaker(uri,
                 WebSocketVersion.V13, null, false, new DefaultHttpHeaders());
     }
@@ -56,7 +58,10 @@ public class EchoWebSocketHandler extends SimpleChannelInboundHandler<Object> {
         WebSocketFrame frame = (WebSocketFrame) msg;
         if (frame instanceof TextWebSocketFrame) {
             TextWebSocketFrame textFrame = (TextWebSocketFrame) frame;
-            parser.parse(textFrame.text());
+            if(this.isOrder)
+                parser.parse_order(textFrame.text());
+            else if(!this.isOrder)
+                parser.parse(textFrame.text());
             //System.out.println("WebSocket Client received message: " + textFrame.text());
         } else if (frame instanceof PongWebSocketFrame) {
             System.out.println("WebSocket Client received pong");

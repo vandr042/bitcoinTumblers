@@ -10,10 +10,12 @@ public class HttpClient implements Runnable{
     private final String URL;
     public Thread worker;
     private Parser parser = null;
+    boolean isOrder;
     
-    public HttpClient(String url, Parser p){
-        URL = url;
-        parser = p;
+    public HttpClient(String url, Parser p, boolean isorder){
+        this.URL = url;
+        this.parser = p;
+        this.isOrder = isorder;
         worker = new Thread(this); 
     }
     
@@ -42,7 +44,10 @@ public class HttpClient implements Runnable{
     public void run() {
         while(Thread.currentThread() == this.worker){
             try{
-                parser.parse(this.getHypertext());
+                if(this.isOrder)
+                    parser.parse_order(this.getHypertext());
+                else if(!this.isOrder)
+                    parser.parse(this.getHypertext());
             }
             catch(Exception e){
                 e.printStackTrace();

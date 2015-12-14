@@ -11,8 +11,10 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class Serializer implements Runnable{
     
     private LinkedBlockingQueue<Trade> trades;
+    private LinkedBlockingQueue<Order> orders;
     Thread trade_serializer, order_serializer;
-    private String CSVHead = "Id,Provenance,Exchange,Symbol_Pair,Type,Price,Volume,Timestamp";
+    private final String CSVHeadTrade = "Id,Provenance,Exchange,Symbol_Pair,Type,Price,Volume,Timestamp";
+    private final String CSVHeadOrder = "Provenance,Exchange,Symbol_Pair,Type,Price,Volume,First Seen,Last Seen";
 
     // <editor-fold defaultstate="collapsed" desc="Date Variables">
     Date today;
@@ -20,15 +22,16 @@ public class Serializer implements Runnable{
     // </editor-fold>
     
     // <editor-fold defaultstate="collapsed" desc="File Variables">
-    File currentFile;
-    FileOutputStream fos;
+    File currentTradeFile, currentOrderFile;
+    FileOutputStream fos_trade, fos_order;
     // </editor-fold>
     
     
-    public Serializer(LinkedBlockingQueue<Trade> queue){
+    public Serializer(LinkedBlockingQueue<Trade> queue_trades, LinkedBlockingQueue<Order> queue_order){
         
         //Pass reference to our main queue into varible "trades"
-        this.trades = queue;
+        this.trades = queue_trades;
+        this.orders = queue_order;
         
         //Initialize Date Format for file nomenclature
         dateformat = new SimpleDateFormat("MMM-dd-yyyy");
@@ -38,7 +41,7 @@ public class Serializer implements Runnable{
         today = Date.from(Instant.EPOCH);
         
         trade_serializer = new Thread(this);
-        
+        order_serializer = new Thread(this);
     }
     
     @Override
@@ -46,22 +49,20 @@ public class Serializer implements Runnable{
         while(trade_serializer == Thread.currentThread()){
             SerializeTrades();
         } 
+        while(order_serializer == Thread.currentThread()){
+            SerializeOrders();
+        } 
     }
     
     
     public void SerializeOrders(){
-        //not implemented yet
-    }
-    
-    public void SerializeTrades(){
-        
         //Check if it is still today
         if(dateformat.format(Date.from(Instant.now())).equals(dateformat.format(today))){
             
             try{
-                //Write the next Trade in the queue
-                fos.write(trades.take().getCSV().getBytes());
-                fos.write('\n');
+                //Write the next Order in the queue
+                fos_order.write(orders.take().getCSV().getBytes());
+                fos_order.write('\n');
             }
             catch(InterruptedException | IOException e){
                 e.printStackTrace();
@@ -75,17 +76,17 @@ public class Serializer implements Runnable{
             
             //First we'll update our variable "today" to the actual current date
             today = Date.from(Instant.now());
-            System.out.println("Making new file!");
+            System.out.println("Making new Order file!");
             //Then we'll create a new file
-            currentFile = new File("Database/Trades/"+dateformat.format(today)+".csv");
+            currentOrderFile = new File("Database/Orders/"+dateformat.format(today)+".csv");
             
-            if(!currentFile.exists()){
+            if(!currentOrderFile.exists()){
                 try{
-                    currentFile.createNewFile();
-                    fos = new FileOutputStream(currentFile, true);
+                    currentOrderFile.createNewFile();
+                    fos_order = new FileOutputStream(currentOrderFile, true);
                     //We need to write the CSV header to the file
-                    fos.write(CSVHead.getBytes());
-                    fos.write('\n');
+                    fos_order.write(CSVHeadOrder.getBytes());
+                    fos_order.write('\n');
                 }
                 catch (IOException e){
                     e.printStackTrace();
@@ -94,9 +95,64 @@ public class Serializer implements Runnable{
     
             //This enables us to have a FileOutputStream if we are not opening a new file, but rather reconnecting to an old file to append to it,
             //in the case that the computer unexpectedly shuts down and we need to restart the program.
-            else if(currentFile.exists()){
+            else if(currentOrderFile.exists()){
                 try{
-                    fos = new FileOutputStream(currentFile, true);
+                    fos_order = new FileOutputStream(currentOrderFile, true);
+                }
+                catch(IOException e){
+                    e.printStackTrace();
+                }
+            }
+            
+            //Now that we've created a new file with CSV header, 
+            //the next time around, we can start adding Orders to it.
+        }
+    }
+    
+    public void SerializeTrades(){
+        
+        //Check if it is still today
+        if(dateformat.format(Date.from(Instant.now())).equals(dateformat.format(today))){
+            
+            try{
+                //Write the next Trade in the queue
+                fos_trade.write(trades.take().getCSV().getBytes());
+                fos_trade.write('\n');
+            }
+            catch(InterruptedException | IOException e){
+                e.printStackTrace();
+            }
+            
+        }
+        
+        //If the next day has arrived, lets create a new file.
+        //NOTE: When the program starts, this will always be executed first, since we set "today" to initially be a bogus date.
+        else{
+            
+            //First we'll update our variable "today" to the actual current date
+            today = Date.from(Instant.now());
+            System.out.println("Making new Trade file!");
+            //Then we'll create a new file
+            currentTradeFile = new File("Database/Trades/"+dateformat.format(today)+".csv");
+            
+            if(!currentTradeFile.exists()){
+                try{
+                    currentTradeFile.createNewFile();
+                    fos_trade = new FileOutputStream(currentTradeFile, true);
+                    //We need to write the CSV header to the file
+                    fos_trade.write(CSVHeadTrade.getBytes());
+                    fos_trade.write('\n');
+                }
+                catch (IOException e){
+                    e.printStackTrace();
+                }
+            }
+    
+            //This enables us to have a FileOutputStream if we are not opening a new file, but rather reconnecting to an old file to append to it,
+            //in the case that the computer unexpectedly shuts down and we need to restart the program.
+            else if(currentTradeFile.exists()){
+                try{
+                    fos_trade = new FileOutputStream(currentTradeFile, true);
                 }
                 catch(IOException e){
                     e.printStackTrace();

@@ -4,15 +4,15 @@ package exchange;
 public class Trade {
 
     // <editor-fold defaultstate="collapsed" desc="Trade Variables">
-    private String type, //Ask = Sell; Bid = Buy
-                   SYMB_PAIR, //ex. "BTC_USD"
-                   EXCH, //ex. "BTC_USD"
-                   prov, //Where we got the info from ex. "btc-e.com"
-                   time_completed, //timestamp of the trade
-                   tid; //trade ID
+    private final String type, //Ask = Sell; Bid = Buy
+                         SYMB_PAIR, //ex. "BTC_USD"
+                         EXCH, //ex. "BTC_USD"
+                         prov, //Where we got the info from ex. "btc-e.com"
+                         time_completed, //timestamp of the trade
+                         tid; //trade ID
     
-    private double volume, //amount bought or sold
-                   price; //price at which trade was made
+    private final double volume, //amount bought or sold
+                         price; //price at which trade was made
     // </editor-fold>
     
     public Trade(String type, String SYMB_PAIR, String EXCH, String prov, double price, double volume, String time_completed, String tid){

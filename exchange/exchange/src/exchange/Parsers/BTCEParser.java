@@ -1,5 +1,6 @@
 package exchange.Parsers;
 
+import exchange.Order;
 import org.json.*;
 import exchange.Trade;
 import java.io.ByteArrayInputStream;
@@ -12,13 +13,15 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class BTCEParser implements Parser{
     
     LinkedBlockingQueue<Trade> trades;
+    LinkedBlockingQueue<Order> orders;
     Map allTimeHighest = new HashMap();
     Map currentHighest = new HashMap();
     String[] symbpairs = {"btc_usd", "btc_rur", "btc_eur", "ltc_btc", "ltc_usd", "ltc_rur", "ltc_eur", "nmc_btc", "nmc_usd", "nvc_btc", "nvc_usd", "usd_rur", "eur_usd", "eur_rur", "ppc_btc", "ppc_usd"};
 
     
-    public BTCEParser(LinkedBlockingQueue<Trade> queue){
-        this.trades = queue; //Pass reference to our main queue into varible "trades"
+    public BTCEParser(LinkedBlockingQueue<Trade> queue_trades, LinkedBlockingQueue<Order> queue_orders){
+        this.trades = queue_trades; //Pass reference to our main queue into varible "trades"
+        this.orders = queue_orders;
         
         allTimeHighest.put("btc_usd", 0);
         allTimeHighest.put("btc_rur", 0);
@@ -100,5 +103,35 @@ public class BTCEParser implements Parser{
         }
         System.out.println("Serialized BTC-E Trades: " + serialized);
     }//Close Function
+
+    @Override
+    public void parse_order(String data) throws Exception {
+        InputStream stream = new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8));
+        JSONTokener tokener = new JSONTokener(stream);
+        JSONObject root = new JSONObject(tokener); //Entire Object
+        JSONObject temp; //To store separate currency pairs
+        JSONArray asks, bids; //To store the bids and ask array of a given currency pair
+        
+        //Loop over each Currency Pair (16 pairs)
+        for(int i = 0; i < root.names().length(); i++){
+            temp = (JSONObject)root.get(root.names().get(i).toString());
+            asks = ((JSONArray)temp.get("asks"));
+            bids = ((JSONArray)temp.get("bids"));
+            //Loop through each ask for said currency pair
+            for(int j = 0; j < asks.length(); j++){
+                //Create and Put Ask Order
+                Order a = new Order("ask", root.names().get(i).toString(), root.names().get(i).toString(), "BTC-E", Double.parseDouble(((JSONArray)asks.get(j)).get(1).toString()), Double.parseDouble(((JSONArray)asks.get(j)).get(0).toString()), "NULL", "NULL");
+                orders.put(a);
+            }
+            //Loop through each bid for said currency pair
+            for(int j = 0; j < bids.length(); j++){
+                //Create and Put Ask Order
+                Order b = new Order("bid", root.names().get(i).toString(), root.names().get(i).toString(), "BTC-E", Double.parseDouble(((JSONArray)asks.get(j)).get(1).toString()), Double.parseDouble(((JSONArray)asks.get(j)).get(0).toString()), "NULL", "NULL");
+                orders.put(b);
+            }
+        }
+    }
   
+    
+    
 }

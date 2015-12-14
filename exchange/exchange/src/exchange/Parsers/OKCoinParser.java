@@ -25,12 +25,13 @@ public class OKCoinParser implements Parser{
         
         String channel = root.get("channel").toString();
         JSONArray trade_data = (JSONArray)root.get("data");
+        JSONArray temp;
         
         if(channel.equals("ok_btcusd_trades_v1")){
             
             for(int i = 0; i < trade_data.length(); i++){
                 
-                JSONArray temp = (JSONArray)trade_data.get(i);
+                temp = (JSONArray)trade_data.get(i);
                 Trade a = new Trade(temp.get(4).toString(), 
                                     "BTCUSD", 
                                     "BTCUSD", 
@@ -48,7 +49,7 @@ public class OKCoinParser implements Parser{
             
             for(int i = 0; i < trade_data.length(); i++){
                 
-                JSONArray temp = (JSONArray)trade_data.get(i);
+                temp = (JSONArray)trade_data.get(i);
                 Trade a = new Trade(temp.get(4).toString(), 
                                     "LTCUSD", 
                                     "LTCUSD", 
@@ -63,6 +64,11 @@ public class OKCoinParser implements Parser{
           System.out.println("Serializing OKCoin - 'LTCUSD'");  
         }
          
+    }
+
+    @Override
+    public void parse_order(String data) throws Exception {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
   
 }

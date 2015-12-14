@@ -101,5 +101,10 @@ public class BitfinexParser implements Parser{
           System.out.println("Serializing BITFINEX");  
         }//Close Else     
     }
+
+    @Override
+    public void parse_order(String data) throws Exception {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
   
 }

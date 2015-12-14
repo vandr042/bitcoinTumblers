@@ -30,11 +30,11 @@ public class WebSocketClient {
     private Channel channel;
     private URI uri;
 
-    public WebSocketClient(String url, Parser p) throws URISyntaxException, SSLException {
+    public WebSocketClient(String url, Parser p, boolean isorder) throws URISyntaxException, SSLException {
         uri = new URI(url);
         bootstrap = new Bootstrap();
         group = new NioEventLoopGroup();
-        bootstrap.group(group).channel(NioSocketChannel.class).handler(new EchoWebSocketClientInitializer(p));
+        bootstrap.group(group).channel(NioSocketChannel.class).handler(new EchoWebSocketClientInitializer(p, isorder));
     }
 
     public void connect() throws URISyntaxException, InterruptedException {
@@ -66,9 +66,11 @@ public class WebSocketClient {
         private static final int MAX_LENGTH = 1048576;
         private final SslContext sslCtx;
         private Parser parser = null;
+        boolean isOrder;
 
-        public EchoWebSocketClientInitializer(Parser p) throws URISyntaxException, SSLException {
+        public EchoWebSocketClientInitializer(Parser p, boolean isorder) throws URISyntaxException, SSLException {
             this.parser = p;
+            this.isOrder = isorder;
             this.sslCtx = SslContextBuilder.forClient().build();
         }
 
@@ -83,7 +85,7 @@ public class WebSocketClient {
             pipeline.addLast(new HttpClientCodec());
             pipeline.addLast(new HttpContentDecompressor());
             pipeline.addLast(new HttpObjectAggregator(MAX_LENGTH));
-            pipeline.addLast(new EchoWebSocketHandler(uri.toString(), this.parser));
+            pipeline.addLast(new EchoWebSocketHandler(uri.toString(), this.parser, this.isOrder));
         }
     }
 
