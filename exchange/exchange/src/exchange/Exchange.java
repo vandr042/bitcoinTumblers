@@ -16,27 +16,37 @@ public final class Exchange {
     private static void initBitfinex() throws SSLException, URISyntaxException{
         
         //Initialize Bitfinex - required to make three sepearate requests (in JSON format) to WSS to get all three exchanges.
-        BitfinexParser bitfinex_parser = new BitfinexParser(trades);
+        BitfinexParser bitfinex_parser = new BitfinexParser(trades, orders);
         
         String BITFINEX_URL = "wss://api2.bitfinex.com:3000/ws";
         
-        String BITFINEX_REQEST_BTCUSD = "{\"event\":\"subscribe\", \"channel\":\"trades\", \"pair\":[\"btcusd\"]}"; //examples at http://docs.bitfinex.com/?javascript#order-books
-        String BITFINEX_REQEST_LTCUSD = "{\"event\":\"subscribe\", \"channel\":\"trades\", \"pair\":[\"ltcusd\"]}";
-        String BITFINEX_REQEST_LTCBTC = "{\"event\":\"subscribe\", \"channel\":\"trades\", \"pair\":[\"ltcbtc\"]}";
+        String BITFINEX_TRADE_REQEST_BTCUSD = "{\"event\":\"subscribe\", \"channel\":\"trades\", \"pair\":[\"btcusd\"]}"; //examples at http://docs.bitfinex.com/?javascript#order-books
+        String BITFINEX_TRADE_REQEST_LTCUSD = "{\"event\":\"subscribe\", \"channel\":\"trades\", \"pair\":[\"ltcusd\"]}";
+        String BITFINEX_TRADE_REQEST_LTCBTC = "{\"event\":\"subscribe\", \"channel\":\"trades\", \"pair\":[\"ltcbtc\"]}";
         
-        WebSocketClient bitfinex_client = new WebSocketClient(BITFINEX_URL, bitfinex_parser, false);
+        String BITFINEX_ORDER_REQEST_BTCUSD = "{\"event\":\"subscribe\", \"channel\":\"book\", \"pair\":[\"btcusd\"]}"; //examples at http://docs.bitfinex.com/?javascript#order-books
+        String BITFINEX_ORDER_REQEST_LTCUSD = "{\"event\":\"subscribe\", \"channel\":\"book\", \"pair\":[\"ltcusd\"]}";
+        String BITFINEX_ORDER_REQEST_LTCBTC = "{\"event\":\"subscribe\", \"channel\":\"book\", \"pair\":[\"ltcbtc\"]}";
+        
+        WebSocketClient bitfinex_client_trades = new WebSocketClient(BITFINEX_URL, bitfinex_parser, false);
+        WebSocketClient bitfinex_client_orders = new WebSocketClient(BITFINEX_URL, bitfinex_parser, true);
         
         try{
-            bitfinex_client.connect();
-            bitfinex_client.send(BITFINEX_REQEST_BTCUSD);
-            bitfinex_client.send(BITFINEX_REQEST_LTCUSD);
-            bitfinex_client.send(BITFINEX_REQEST_LTCBTC);
+            bitfinex_client_trades.connect();
+            bitfinex_client_trades.send(BITFINEX_TRADE_REQEST_BTCUSD);
+            bitfinex_client_trades.send(BITFINEX_TRADE_REQEST_LTCUSD);
+            bitfinex_client_trades.send(BITFINEX_TRADE_REQEST_LTCBTC);
+            
+            bitfinex_client_orders.connect();
+            bitfinex_client_orders.send(BITFINEX_ORDER_REQEST_BTCUSD);
+            bitfinex_client_orders.send(BITFINEX_ORDER_REQEST_LTCUSD);
+            bitfinex_client_orders.send(BITFINEX_ORDER_REQEST_LTCBTC);
         } catch (InterruptedException | URISyntaxException e) { e.printStackTrace(); }
         
     }
     private static void initPoloniex() throws SSLException, URISyntaxException{
         
-        PoloniexParser poloniex_parser = new PoloniexParser(trades);
+        /*PoloniexParser poloniex_parser = new PoloniexParser(trades);
         
         String POLONIEX_URL = "wss://api.poloniex.com";
         String POLONIEX_REQEST_BTCUSD = "subscribe";
@@ -46,7 +56,7 @@ public final class Exchange {
         try{
             poloniex_client.connect();
             //poloniex_client.send(POLONIEX_REQEST_BTCUSD);
-        } catch (InterruptedException | URISyntaxException e) { e.printStackTrace(); }
+        } catch (InterruptedException | URISyntaxException e) { e.printStackTrace(); }*/
         
     }
     private static void initBTCE(){
@@ -67,19 +77,26 @@ public final class Exchange {
     private static void initOKCoin() throws SSLException, URISyntaxException{
         
         //Initialize OKCoin - required to make three sepearate requests (in JSON format) to WSS to get all three exchanges.
-        OKCoinParser okcoin_parser = new OKCoinParser(trades);
+        OKCoinParser okcoin_parser = new OKCoinParser(trades, orders);
         
         String OKCOIN_URL = "wss://real.okcoin.com:10440/websocket/okcoinapi";
-        String OKCOIN_REQEST_BTCUSD = "{\"event\":\"addChannel\", \"channel\":\"ok_btcusd_trades_v1\"}";
-        String OKCOIN_REQEST_LTCUSD = "{\"event\":\"addChannel\", \"channel\":\"ok_ltcusd_trades_v1\"}";
+        String OKCOIN_TRADE_REQEST_BTCUSD = "{\"event\":\"addChannel\", \"channel\":\"ok_btcusd_trades_v1\"}";
+        String OKCOIN_TRADE_REQEST_LTCUSD = "{\"event\":\"addChannel\", \"channel\":\"ok_ltcusd_trades_v1\"}";
+        
+        String OKCOIN_ORDER_REQEST_BTCUSD = "{\"event\":\"addChannel\", \"channel\":\"ok_btcusd_depth\"}";
+        String OKCOIN_ORDER_REQEST_LTCUSD = "{\"event\":\"addChannel\", \"channel\":\"ok_ltcusd_depth\"}";
         //LTCCNY and BTCCNY don't work, even thought crytocoinschart.info says...
         
-        WebSocketClient okcoin_client = new WebSocketClient(OKCOIN_URL, okcoin_parser, false);
+        WebSocketClient okcoin_client_trade = new WebSocketClient(OKCOIN_URL, okcoin_parser, false);
+        WebSocketClient okcoin_client_order = new WebSocketClient(OKCOIN_URL, okcoin_parser, true);
         
         try{
-            okcoin_client.connect();
-            okcoin_client.send(OKCOIN_REQEST_BTCUSD);
-            okcoin_client.send(OKCOIN_REQEST_LTCUSD);
+            okcoin_client_trade.connect();
+            okcoin_client_trade.send(OKCOIN_TRADE_REQEST_BTCUSD);
+            okcoin_client_trade.send(OKCOIN_TRADE_REQEST_LTCUSD);
+            okcoin_client_order.connect();
+            okcoin_client_order.send(OKCOIN_ORDER_REQEST_BTCUSD);
+            okcoin_client_order.send(OKCOIN_ORDER_REQEST_LTCUSD);
         } catch (InterruptedException | URISyntaxException e) { e.printStackTrace(); }
         
     }
@@ -93,7 +110,6 @@ public final class Exchange {
         serializer.run();
 
         initBitfinex(); //Initialize Bitfinex
-        //initPoloniex(); //Initialize Poloniex
         initBTCE(); //Initialize BTC-E
         initOKCoin(); //Initialize OKCoin
   

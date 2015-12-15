@@ -1,72 +1,17 @@
 
-
-
-
-
-
-
-
-
-
-
-
-package exchange.Parsers;
-
-import org.json.*;
-import exchange.Trade;
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.LinkedBlockingQueue;
-
-
-public class BTCEParser implements Parser{
-    
-    LinkedBlockingQueue<Trade> trades;
-    private long allTimeHighestTradeID = 0;
-    private long currentHighestTradeID = 0;
-
-    public BTCEParser(LinkedBlockingQueue<Trade> queue){
-        this.trades = queue; //Pass reference to our main queue into varible "trades"
-    }
-
-    @Override
-    public void parse(String data) throws InterruptedException, JSONException, NumberFormatException{
-        
-        System.out.println("BTCE");
-        InputStream stream = new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8));
-        JSONTokener tokener = new JSONTokener(stream);
-        JSONObject root = new JSONObject(tokener);
-        JSONObject temp;
-
-        //Loop through the Symbol Pair
-        for(int i = 0; i < root.names().length(); i++){
-            //Loop through each trade of the given Symbol Pair
-            for(int j = 0; j < ((JSONArray)root.get(root.names().get(i).toString())).length(); j++){
+            
+            for(int i = 0; i < trade_data.length(); i++){
                 
-                //Store the current JSON trade in "temp"
-                temp = ((JSONObject)(((JSONArray)root.get(root.names().get(i).toString())).get(j)));
+                temp = (JSONArray)trade_data.get(i);
+                Trade a = new Trade(temp.get(4).toString(), 
+                                    channel, 
+                                    channel, 
+                                    "OKCoin", 
+                                    Double.parseDouble(temp.get(1).toString()), 
+                                    Double.parseDouble(temp.get(2).toString()), 
+                                    temp.get(3).toString(), 
+                                    temp.get(0).toString());
                 
-                if(Long.parseLong(temp.get("tid").toString()) > allTimeHighestTradeID){
-                    if(Long.parseLong(temp.get("tid").toString()) > currentHighestTradeID)
-                        currentHighestTradeID = Long.parseLong(temp.get("tid").toString());
-                    //Create a Trade object
-                    Trade a = new Trade(temp.get("type").toString(), 
-                                        root.names().get(i).toString(), 
-                                        root.names().get(i).toString(),
-                                        "BTC-E",
-                                        Double.parseDouble(temp.get("price").toString()),
-                                        Double.parseDouble(temp.get("amount").toString()),
-                                        temp.get("timestamp").toString(),
-                                        temp.get("tid").toString());
-                    //Put Trade object inside our queue
-                    trades.put(a);
-                }
-            }//Close Inner Loop
-        }//Close Outer Loop
-        
-        if(currentHighestTradeID > allTimeHighestTradeID)
-            allTimeHighestTradeID = currentHighestTradeID;
-    }
-  
-}
+                trades.put(a);
+            }
+          System.out.println("Serializing OKCoin Trades");

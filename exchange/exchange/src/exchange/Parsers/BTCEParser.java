@@ -130,6 +130,7 @@ public class BTCEParser implements Parser{
                 orders.put(b);
             }
         }
+        System.out.println("Serialized BTC-E Orders");
     }
   
     
