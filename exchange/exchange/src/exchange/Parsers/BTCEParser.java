@@ -14,6 +14,8 @@ public class BTCEParser implements Parser{
     
     LinkedBlockingQueue<Trade> trades;
     LinkedBlockingQueue<Order> orders;
+    
+    //Used to elimate redundant trades
     Map allTimeHighest = new HashMap();
     Map currentHighest = new HashMap();
     String[] symbpairs = {"btc_usd", "btc_rur", "btc_eur", "ltc_btc", "ltc_usd", "ltc_rur", "ltc_eur", "nmc_btc", "nmc_usd", "nvc_btc", "nvc_usd", "usd_rur", "eur_usd", "eur_rur", "ppc_btc", "ppc_usd"};
@@ -23,6 +25,7 @@ public class BTCEParser implements Parser{
         this.trades = queue_trades; //Pass reference to our main queue into varible "trades"
         this.orders = queue_orders;
         
+        //Sets the initial highest trade ID to zero, since we haven't got any trades yet
         allTimeHighest.put("btc_usd", 0);
         allTimeHighest.put("btc_rur", 0);
         allTimeHighest.put("btc_eur", 0);

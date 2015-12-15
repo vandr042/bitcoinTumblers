@@ -10,14 +10,14 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 public class Serializer implements Runnable{
     
-    private LinkedBlockingQueue<Trade> trades;
+    private LinkedBlockingQueue<Trade> trades; //Handle to the queues created in Main class
     private LinkedBlockingQueue<Order> orders;
     Thread trade_serializer, order_serializer;
     private final String CSVHeadTrade = "Id,Provenance,Exchange,Symbol_Pair,Type,Price,Volume,Timestamp";
     private final String CSVHeadOrder = "Provenance,Exchange,Symbol_Pair,Type,Price,Volume,First Seen,Last Seen";
 
     // <editor-fold defaultstate="collapsed" desc="Date Variables">
-    Date today;
+    Date today; //Used for file naming conventions
     DateFormat dateformat;
     // </editor-fold>
     
@@ -29,19 +29,19 @@ public class Serializer implements Runnable{
     
     public Serializer(LinkedBlockingQueue<Trade> queue_trades, LinkedBlockingQueue<Order> queue_order){
         
-        //Pass reference to our main queue into varible "trades"
+        //Pass reference to our main queue into varible "trades" and "orders"
         this.trades = queue_trades;
         this.orders = queue_order;
         
         //Initialize Date Format for file nomenclature
         dateformat = new SimpleDateFormat("MMM-dd-yyyy");
         
-        //Set a bogus date initially. 
-        //This is modified when the thread starts, and a bogus value is needed to make sure trades are recorded for the first day.
-        today = Date.from(Instant.EPOCH);
+        //This is modified when the thread starts, and a bogus value is needed to make sure trades and orders are recorded for the first day.
+        today = Date.from(Instant.EPOCH); //Set a bogus date initially, so that it has to create a new file.
         
         trade_serializer = new Thread(this);
         order_serializer = new Thread(this);
+        
     }
     
     @Override
@@ -84,7 +84,7 @@ public class Serializer implements Runnable{
                 try{
                     currentOrderFile.createNewFile();
                     fos_order = new FileOutputStream(currentOrderFile, true);
-                    //We need to write the CSV header to the file
+                    //We need to write the CSV header to the file intially
                     fos_order.write(CSVHeadOrder.getBytes());
                     fos_order.write('\n');
                 }
@@ -104,8 +104,7 @@ public class Serializer implements Runnable{
                 }
             }
             
-            //Now that we've created a new file with CSV header, 
-            //the next time around, we can start adding Orders to it.
+            //Now that we've created a new file with CSV header, the next time around, we can start adding Orders to it.
         }
     }
     
@@ -139,7 +138,7 @@ public class Serializer implements Runnable{
                 try{
                     currentTradeFile.createNewFile();
                     fos_trade = new FileOutputStream(currentTradeFile, true);
-                    //We need to write the CSV header to the file
+                    //We need to write the CSV header to the file initially
                     fos_trade.write(CSVHeadTrade.getBytes());
                     fos_trade.write('\n');
                 }
@@ -159,8 +158,7 @@ public class Serializer implements Runnable{
                 }
             }
             
-            //Now that we've created a new file with CSV header, 
-            //the next time around, we can start adding Trades to it.
+            //Now that we've created a new file with CSV header, the next time around, we can start adding Trades to it.
         }
     }
  

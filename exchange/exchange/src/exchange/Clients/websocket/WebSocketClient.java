@@ -30,6 +30,7 @@ public class WebSocketClient {
     private Channel channel;
     private URI uri;
 
+    //isOrder - specifies if this client is for an order (true) or trade (false)
     public WebSocketClient(String url, Parser p, boolean isorder) throws URISyntaxException, SSLException {
         uri = new URI(url);
         bootstrap = new Bootstrap();

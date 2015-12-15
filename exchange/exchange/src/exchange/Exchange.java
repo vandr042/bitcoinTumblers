@@ -11,7 +11,7 @@ import javax.net.ssl.SSLException;
 public final class Exchange {
     
     static LinkedBlockingQueue<Trade> trades = new LinkedBlockingQueue<>(); //Queue to store trades
-    static LinkedBlockingQueue<Order> orders = new LinkedBlockingQueue<>(); //Queue to store trades
+    static LinkedBlockingQueue<Order> orders = new LinkedBlockingQueue<>(); //Queue to store orders
     
     private static void initBitfinex() throws SSLException, URISyntaxException{
         
@@ -28,16 +28,16 @@ public final class Exchange {
         String BITFINEX_ORDER_REQEST_LTCUSD = "{\"event\":\"subscribe\", \"channel\":\"book\", \"pair\":[\"ltcusd\"]}";
         String BITFINEX_ORDER_REQEST_LTCBTC = "{\"event\":\"subscribe\", \"channel\":\"book\", \"pair\":[\"ltcbtc\"]}";
         
-        WebSocketClient bitfinex_client_trades = new WebSocketClient(BITFINEX_URL, bitfinex_parser, false);
-        WebSocketClient bitfinex_client_orders = new WebSocketClient(BITFINEX_URL, bitfinex_parser, true);
+        WebSocketClient bitfinex_client_trades = new WebSocketClient(BITFINEX_URL, bitfinex_parser, false); //Bitfinex WS Client for trades
+        WebSocketClient bitfinex_client_orders = new WebSocketClient(BITFINEX_URL, bitfinex_parser, true); //Bitfinex WS Client for orders
         
         try{
-            bitfinex_client_trades.connect();
+            bitfinex_client_trades.connect(); //send request for trade data
             bitfinex_client_trades.send(BITFINEX_TRADE_REQEST_BTCUSD);
             bitfinex_client_trades.send(BITFINEX_TRADE_REQEST_LTCUSD);
             bitfinex_client_trades.send(BITFINEX_TRADE_REQEST_LTCBTC);
             
-            bitfinex_client_orders.connect();
+            bitfinex_client_orders.connect(); //send request for order data
             bitfinex_client_orders.send(BITFINEX_ORDER_REQEST_BTCUSD);
             bitfinex_client_orders.send(BITFINEX_ORDER_REQEST_LTCUSD);
             bitfinex_client_orders.send(BITFINEX_ORDER_REQEST_LTCBTC);
@@ -45,7 +45,6 @@ public final class Exchange {
         
     }
     private static void initPoloniex() throws SSLException, URISyntaxException{
-        
         /*PoloniexParser poloniex_parser = new PoloniexParser(trades);
         
         String POLONIEX_URL = "wss://api.poloniex.com";
@@ -57,7 +56,6 @@ public final class Exchange {
             poloniex_client.connect();
             //poloniex_client.send(POLONIEX_REQEST_BTCUSD);
         } catch (InterruptedException | URISyntaxException e) { e.printStackTrace(); }*/
-        
     }
     private static void initBTCE(){
         //Initialize BTC-E - URL takes care of retreving all exchange pairs; retrieves 150 trades for each pair.
@@ -66,10 +64,10 @@ public final class Exchange {
         String BTCE_URL_TRADES = "https://btc-e.com/api/3/trades/btc_usd-btc_rur-btc_eur-ltc_btc-ltc_usd-ltc_rur-ltc_eur-nmc_btc-nmc_usd-nvc_btc-nvc_usd-usd_rur-eur_usd-eur_rur-ppc_btc-ppc_usd?limit=150";
         String BTCE_URL_ORDERS = "https://btc-e.com/api/3/depth/btc_usd-btc_rur-btc_eur-ltc_btc-ltc_usd-ltc_rur-ltc_eur-nmc_btc-nmc_usd-nvc_btc-nvc_usd-usd_rur-eur_usd-eur_rur-ppc_btc-ppc_usd?limit=10";
         
-        HttpClient btce_client_trades = new HttpClient(BTCE_URL_TRADES, btce_parser, false);
-        HttpClient btce_client_orders = new HttpClient(BTCE_URL_ORDERS, btce_parser, true);
+        HttpClient btce_client_trades = new HttpClient(BTCE_URL_TRADES, btce_parser, false); //HTTP Client for trades
+        HttpClient btce_client_orders = new HttpClient(BTCE_URL_ORDERS, btce_parser, true); //HTTP Client for orders
         
-        btce_client_trades.worker.start();
+        btce_client_trades.worker.start(); //start the threads that pulls data every 10 seconds
         btce_client_orders.worker.start();
         btce_client_trades.run();
         btce_client_orders.run();
@@ -87,13 +85,14 @@ public final class Exchange {
         String OKCOIN_ORDER_REQEST_LTCUSD = "{\"event\":\"addChannel\", \"channel\":\"ok_ltcusd_depth\"}";
         //LTCCNY and BTCCNY don't work, even thought crytocoinschart.info says...
         
-        WebSocketClient okcoin_client_trade = new WebSocketClient(OKCOIN_URL, okcoin_parser, false);
-        WebSocketClient okcoin_client_order = new WebSocketClient(OKCOIN_URL, okcoin_parser, true);
+        WebSocketClient okcoin_client_trade = new WebSocketClient(OKCOIN_URL, okcoin_parser, false); //Trade Client
+        WebSocketClient okcoin_client_order = new WebSocketClient(OKCOIN_URL, okcoin_parser, true); //Order Client
         
         try{
             okcoin_client_trade.connect();
             okcoin_client_trade.send(OKCOIN_TRADE_REQEST_BTCUSD);
             okcoin_client_trade.send(OKCOIN_TRADE_REQEST_LTCUSD);
+            
             okcoin_client_order.connect();
             okcoin_client_order.send(OKCOIN_ORDER_REQEST_BTCUSD);
             okcoin_client_order.send(OKCOIN_ORDER_REQEST_LTCUSD);
@@ -104,8 +103,8 @@ public final class Exchange {
     
     public static void main(String[] args) throws Exception {
         
-        Serializer serializer = new Serializer(trades, orders); //Serializes the trades and objects in the respective queues. 
-        serializer.trade_serializer.start();
+        Serializer serializer = new Serializer(trades, orders); //Serializer takes reference to trade and order queues
+        serializer.trade_serializer.start(); 
         serializer.order_serializer.start();
         serializer.run();
 

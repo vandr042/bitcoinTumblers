@@ -9,6 +9,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 
+//I know this is named Echo, but that has nothing to do with it, I will refactor.
 public class EchoWebSocketHandler extends SimpleChannelInboundHandler<Object> {
 
     private final WebSocketClientHandshaker handshaker;
@@ -41,10 +42,10 @@ public class EchoWebSocketHandler extends SimpleChannelInboundHandler<Object> {
     @Override
     public void channelInactive(ChannelHandlerContext ctx){
         System.out.println("WebSocket Client disconnected!");
-        System.exit(0);
+        System.exit(0); //Sometimes OKCoin won't let us connect, so we will just temrinate the program if we can't get a connection.
     }
 
-    @Override
+    @Override //Main method that handles the pushed JSON
     protected void channelRead0(ChannelHandlerContext ctx, Object msg) throws Exception {
         Channel ch = ctx.channel();
 
@@ -58,10 +59,12 @@ public class EchoWebSocketHandler extends SimpleChannelInboundHandler<Object> {
         WebSocketFrame frame = (WebSocketFrame) msg;
         if (frame instanceof TextWebSocketFrame) {
             TextWebSocketFrame textFrame = (TextWebSocketFrame) frame;
+            //Here is where we handle the JSON depending on whether it is an order or a trade
             if(this.isOrder)
                 parser.parse_order(textFrame.text());
             else if(!this.isOrder)
                 parser.parse(textFrame.text());
+            
             //System.out.println("WebSocket Client received message: " + textFrame.text());
         } else if (frame instanceof PongWebSocketFrame) {
             System.out.println("WebSocket Client received pong");

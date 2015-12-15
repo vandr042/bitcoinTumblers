@@ -9,8 +9,8 @@ public class HttpClient implements Runnable{
     
     private final String URL;
     public Thread worker;
-    private Parser parser = null;
-    boolean isOrder;
+    private Parser parser = null; //Handle to the corresponding Parser class
+    boolean isOrder; //Specifies if this Client is going to handle orders. False means it is a Client for trades.
     
     public HttpClient(String url, Parser p, boolean isorder){
         this.URL = url;
@@ -45,9 +45,9 @@ public class HttpClient implements Runnable{
         while(Thread.currentThread() == this.worker){
             try{
                 if(this.isOrder)
-                    parser.parse_order(this.getHypertext());
+                    parser.parse_order(this.getHypertext()); //Method in parser to parse orders
                 else if(!this.isOrder)
-                    parser.parse(this.getHypertext());
+                    parser.parse(this.getHypertext()); //Method in parser to parse trades
             }
             catch(Exception e){
                 e.printStackTrace();
@@ -55,7 +55,7 @@ public class HttpClient implements Runnable{
             
             try{
             System.out.println("Sleeping");
-            Thread.sleep(10000);
+            Thread.sleep(10000); //Wait for 10 seconds
             }
             catch(InterruptedException e){
                e.printStackTrace();
