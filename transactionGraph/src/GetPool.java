@@ -1,7 +1,5 @@
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.PrintWriter;
+import java.io.*;
+import java.util.Set;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -22,100 +20,131 @@ public class GetPool {
 	private AddressFinder addrFinder;
 	private HashSet<Address> depKeys;
 	private HashSet<Address> poolKeys;
-	private static NetworkParameters params;
-	
-	public GetPool() throws IOException, InterruptedException, ExecutionException{
-		params = MainNetParams.get();
-		addrFinder = new AddressFinder(params);
-		depKeys = new HashSet<Address>();
-		poolKeys = new HashSet<Address>();
+
+	private BufferedWriter poolOutput;
+	private BufferedWriter depOutput;
+
+	private boolean ran;
+
+	private static NetworkParameters PARAMS = MainNetParams.get();
+	private static final String KNOWN_DEP_KEY = "1Dv7uNrFYP8JfWo1b7oo14Xz6LjHrycYCj";
+
+	public GetPool() throws IOException, InterruptedException, ExecutionException {
+		this.addrFinder = new AddressFinder(GetPool.PARAMS);
+		this.depKeys = new HashSet<Address>();
+		this.poolKeys = new HashSet<Address>();
+		this.poolOutput = new BufferedWriter(new FileWriter("pkeys.txt"));
+		this.depOutput = new BufferedWriter(new FileWriter("dkeys.txt"));
+		this.ran = false;
 	}
-	
-	/* takes in pool address and an a list as an argument and updates depKeys with new deposit keys */
-	private LinkedList<Address> getInputs(LinkedList<Address> addrList, LinkedList<Address> newDKeys, PrintWriter dwriter) throws InterruptedException, ExecutionException, BlockStoreException{
-		LinkedList<Transaction> outputTx = addrFinder.addrAsOutput(addrList);
-		for (Transaction tx:outputTx){
-			List<TransactionInput> txInputs = tx.getInputs();
-			for (TransactionInput txi:txInputs){
-				Address addr = txi.getFromAddress();
-				boolean added = depKeys.add(addr);
-				if (added == true){
-					dwriter.write(addr.toString());
-					newDKeys.add(addr);
-				}
-			}
-		}
-		return newDKeys;
-	}
-	
-	/* takes in deposit key as an argument and finds all of the pool keys known */
-	private LinkedList<Address> getOutputs(LinkedList<Address> addrList, LinkedList<Address> newPKeys, PrintWriter pwriter) throws InterruptedException, ExecutionException, BlockStoreException{
-		LinkedList<Transaction> inputTx = addrFinder.addrAsInput(addrList);
-		for (Transaction tx:inputTx){
-			List<TransactionOutput> txOutputs = tx.getOutputs();
-			for (TransactionOutput txo:txOutputs){
-				boolean added;
-				Address addr;
-				try{ 
-					addr = (txo.getAddressFromP2PKHScript(params));
-					added = poolKeys.add(addr);
-				}catch (ScriptException e){
-					addr = (txo.getAddressFromP2SH(params));
-					added = poolKeys.add(addr);
-				}
-				if (added = true){
-					pwriter.write(addr.toString());
-					newPKeys.add(txo.getAddressFromP2PKHScript(params));
-				}
-			}
-		}
-		return newPKeys;
-	}
-	
-	/* takes in a pool key and builds sets of pool keys and deposit keys
-	 * by calling getOutputs and getInputs until no new pool keys
-	 * or deposit keys are found. 
+
+	/*
+	 * takes in a pool key and builds sets of pool keys and deposit keys by
+	 * calling getOutputs and getInputs until no new pool keys or deposit keys
+	 * are found.
 	 */
-	public int buildPool(Address depAddr,PrintWriter pwriter, PrintWriter dwriter) throws InterruptedException, ExecutionException, BlockStoreException{
-		LinkedList <Address> newDKeys = new LinkedList<Address>();
-		LinkedList <Address> newPKeys = new LinkedList<Address>();
-		newDKeys.add(depAddr);
-		dwriter.write(depAddr.toString());
-		getOutputs(newDKeys, newPKeys, pwriter);
-		int rounds = 0;
-		//long currTime = System.currentTimeMillis();
-		while (newPKeys.size()!= 0){
-			rounds++;
+	public int buildPool(Address seedDepositKey) throws InterruptedException, ExecutionException, BlockStoreException {
+		if (this.ran) {
+			throw new IllegalStateException("Can't run buildPool twice!");
+		}
+
+		Set<Address> newDKeys = new HashSet<Address>();
+		Set<Address> newPKeys = null;
+		newDKeys.add(seedDepositKey);
+		this.depKeys.add(seedDepositKey);
+		try {
+			this.depOutput.write(seedDepositKey.toString());
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.err.println("ABORTING SINCE FILE I/O FAILED");
 			newDKeys.clear();
-			this.getInputs(newPKeys, newDKeys, pwriter);
-			if (newDKeys.size() != 0){ 
-				newPKeys.clear();
-				this.getOutputs(newDKeys,newPKeys, dwriter);
-			}else{
-				System.out.println("newDKeys: " + newDKeys.size());
-				System.out.println("newPKeys: " + newPKeys.size());
+		}
+
+		int rounds = 0;
+		long startTime = System.currentTimeMillis();
+		System.out.println("*****\nGet pool starting!!!!\n*****");
+		while (newDKeys.size() != 0) {
+			long lapTime = System.currentTimeMillis();
+			rounds++;
+
+			/*
+			 * Get all pool keys paid by this new push of deposit keys, remove
+			 * all the pool keys we know about yielding the set of newly learned
+			 * pool keys, update our fully known set of pool keys after
+			 */
+			newPKeys = this.addrFinder.getKeysPaidBy(newDKeys);
+			newPKeys.removeAll(this.poolKeys);
+			this.poolKeys.addAll(newPKeys);
+
+			/*
+			 * Same game in the opposite direction getting our new set of
+			 * deposit keys
+			 */
+			newDKeys = this.addrFinder.getKeysPayingInto(newPKeys);
+			newDKeys.removeAll(this.depKeys);
+			this.depKeys.addAll(newDKeys);
+
+			/*
+			 * Dump our newly found keys to the correct files
+			 */
+			try {
+				this.dumpSetToFile(newPKeys, this.poolOutput);
+				this.dumpSetToFile(newDKeys, this.depOutput);
+				this.poolOutput.flush();
+				this.depOutput.flush();
+			} catch (IOException e) {
+				e.printStackTrace();
+				System.err.println("ABORTING SINCE FILE I/O FAILED");
 				break;
 			}
+
+			/*
+			 * Output some stats to console
+			 */
+			System.out
+					.println("Round " + rounds + " took " + (System.currentTimeMillis() - lapTime) / 1000 + " seconds");
+			System.out.println("New pool keys " + newPKeys.size());
+			System.out.println("New deposit keys " + newDKeys.size());
 		}
-		addrFinder.done(); //terminates MaxBlockStore
+
+		/*
+		 * Clean up our I/O state
+		 */
+		this.addrFinder.done(); //terminates MaxBlockStore
+		try {
+			this.poolOutput.close();
+			this.depOutput.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.err.println("FAILED TO CLOSE CLEANLY, SOME DATA MAY BE LOST!");
+		}
+
+		System.out.println("*****\nGet pool completed in: " + (System.currentTimeMillis() - startTime) / 1000
+				+ " seconds\nTook " + rounds + " rounds\n*****");
+		System.out.println("Total pool keys: " + this.poolKeys.size());
+		System.out.println("Total deposit keys: " + this.depKeys.size());
+		this.ran = true;
 		return rounds;
 	}
-	
-	public HashSet<Address> getDepositKeys(){
+
+	private void dumpSetToFile(Set<Address> addrSet, BufferedWriter outFP) throws IOException {
+		for (Address tAddr : addrSet) {
+			outFP.write(tAddr.toString() + "\n");
+		}
+	}
+
+	public HashSet<Address> getDepositKeys() {
 		return depKeys;
 	}
-	public HashSet<Address> getPoolKeys(){
+
+	public HashSet<Address> getPoolKeys() {
 		return poolKeys;
 	}
-	
-	public static void main(String[] args) throws AddressFormatException, InterruptedException, ExecutionException, BlockStoreException, IOException {
+
+	public static void main(String[] args)
+			throws AddressFormatException, InterruptedException, ExecutionException, BlockStoreException, IOException {
 		GetPool poolBuilder = new GetPool();
-		File f1 = new File("pkeys.txt");
-		PrintWriter pwriter = new PrintWriter(f1);
-		File f2 = new File("dkeys.txt");
-		PrintWriter dwriter = new PrintWriter(f2);
-		Address addr = new Address(params, "1Q5WQKXZgSrbWoDv2PhGKuMwwaFCZ766zE");
-		int rounds = poolBuilder.buildPool(addr, pwriter, dwriter);
-		System.out.println(rounds);
+		Address addr = new Address(GetPool.PARAMS, GetPool.KNOWN_DEP_KEY);
+		poolBuilder.buildPool(addr);
 	}
 }
