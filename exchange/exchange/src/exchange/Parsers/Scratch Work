@@ -1,0 +1,17 @@
+
+            
+            for(int i = 0; i < trade_data.length(); i++){
+                
+                temp = (JSONArray)trade_data.get(i);
+                Trade a = new Trade(temp.get(4).toString(), 
+                                    channel, 
+                                    channel, 
+                                    "OKCoin", 
+                                    Double.parseDouble(temp.get(1).toString()), 
+                                    Double.parseDouble(temp.get(2).toString()), 
+                                    temp.get(3).toString(), 
+                                    temp.get(0).toString());
+                
+                trades.put(a);
+            }
+          System.out.println("Serializing OKCoin Trades");
