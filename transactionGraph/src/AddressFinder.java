@@ -26,7 +26,7 @@ public class AddressFinder {
 	private MaxBlockStore bstore;
 
 	public AddressFinder(NetworkParameters parameters) throws IOException {
-		bstore = new MaxBlockStore();
+		bstore = new MaxBlockStore("/export/scratch2/public/blockStore");
 		params = parameters;
 	}
 
