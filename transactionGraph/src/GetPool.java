@@ -1,25 +1,18 @@
 import java.io.*;
 import java.util.Set;
 import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.concurrent.ExecutionException;
 
-import org.bitcoinj.core.Address;
 import org.bitcoinj.core.AddressFormatException;
 import org.bitcoinj.core.NetworkParameters;
-import org.bitcoinj.core.ScriptException;
-import org.bitcoinj.core.Transaction;
-import org.bitcoinj.core.TransactionInput;
-import org.bitcoinj.core.TransactionOutput;
 import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.store.BlockStoreException;
 
 public class GetPool {
 
 	private AddressFinder addrFinder;
-	private HashSet<Address> depKeys;
-	private HashSet<Address> poolKeys;
+	private HashSet<String> depKeys;
+	private HashSet<String> poolKeys;
 
 	private BufferedWriter poolOutput;
 	private BufferedWriter depOutput;
@@ -31,8 +24,8 @@ public class GetPool {
 
 	public GetPool() throws IOException, InterruptedException, ExecutionException {
 		this.addrFinder = new AddressFinder(GetPool.PARAMS);
-		this.depKeys = new HashSet<Address>();
-		this.poolKeys = new HashSet<Address>();
+		this.depKeys = new HashSet<String>();
+		this.poolKeys = new HashSet<String>();
 		this.poolOutput = new BufferedWriter(new FileWriter("pkeys.txt"));
 		this.depOutput = new BufferedWriter(new FileWriter("dkeys.txt"));
 		this.ran = false;
@@ -43,13 +36,13 @@ public class GetPool {
 	 * calling getOutputs and getInputs until no new pool keys or deposit keys
 	 * are found.
 	 */
-	public int buildPool(Address seedDepositKey) throws InterruptedException, ExecutionException, BlockStoreException {
+	public int buildPool(String seedDepositKey) throws InterruptedException, ExecutionException, BlockStoreException {
 		if (this.ran) {
 			throw new IllegalStateException("Can't run buildPool twice!");
 		}
 
-		Set<Address> newDKeys = new HashSet<Address>();
-		Set<Address> newPKeys = null;
+		Set<String> newDKeys = new HashSet<String>();
+		Set<String> newPKeys = null;
 		newDKeys.add(seedDepositKey);
 		this.depKeys.add(seedDepositKey);
 		try {
@@ -127,24 +120,23 @@ public class GetPool {
 		return rounds;
 	}
 
-	private void dumpSetToFile(Set<Address> addrSet, BufferedWriter outFP) throws IOException {
-		for (Address tAddr : addrSet) {
-			outFP.write(tAddr.toString() + "\n");
+	private void dumpSetToFile(Set<String> addrSet, BufferedWriter outFP) throws IOException {
+		for (String tAddr : addrSet) {
+			outFP.write(tAddr + "\n");
 		}
 	}
 
-	public HashSet<Address> getDepositKeys() {
+	public HashSet<String> getDepositKeys() {
 		return depKeys;
 	}
 
-	public HashSet<Address> getPoolKeys() {
+	public HashSet<String> getPoolKeys() {
 		return poolKeys;
 	}
 
 	public static void main(String[] args)
 			throws AddressFormatException, InterruptedException, ExecutionException, BlockStoreException, IOException {
 		GetPool poolBuilder = new GetPool();
-		Address addr = new Address(GetPool.PARAMS, GetPool.KNOWN_DEP_KEY);
-		poolBuilder.buildPool(addr);
+		poolBuilder.buildPool(GetPool.KNOWN_DEP_KEY);
 	}
 }

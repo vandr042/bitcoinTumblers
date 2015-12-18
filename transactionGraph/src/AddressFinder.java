@@ -30,16 +30,16 @@ public class AddressFinder {
 		params = parameters;
 	}
 
-	public Set<Address> getKeysPaidBy(Set<Address> inputKeys) {
+	public Set<String> getKeysPaidBy(Set<String> inputKeys) {
 		return this.getKeysTouching(inputKeys, true);
 	}
 
-	public Set<Address> getKeysPayingInto(Set<Address> outputKeys) {
+	public Set<String> getKeysPayingInto(Set<String> outputKeys) {
 		return this.getKeysTouching(outputKeys, false);
 	}
 
-	private Set<Address> getKeysTouching(Set<Address> targetKeys, boolean targetIsInput) {
-		Set<Address> keysTouching = new HashSet<Address>();
+	private Set<String> getKeysTouching(Set<String> targetKeys, boolean targetIsInput) {
+		Set<String> keysTouching = new HashSet<String>();
 		int currentSearchDepth = 0;
 		int stepSize = (int) (Math.floor(AddressFinder.SEARCH_DEPTH) / 10);
 		int currStep = 1;
@@ -67,13 +67,8 @@ public class AddressFinder {
 						for (TransactionInput tx_input : tx_ilist) {
 							try {
 								//TODO what should we ACTUALLY do here?
-								Address in_Addr = tx_input.getFromAddress();
-								for (Address address : targetKeys) {
-									if (in_Addr.toString().equals(address.toString())) {
-										found = true;
-										break;
-									}
-								}
+								String in_Addr = tx_input.getFromAddress().toString();
+								found = targetKeys.contains(in_Addr); 
 							} catch (ScriptException e) {
 								exceptionCount++;
 								break;
@@ -108,15 +103,11 @@ public class AddressFinder {
 								}
 							}
 							if (o_addr == null) {
+								exceptionCount++;
 								continue;
 							}
 
-							for (Address address : targetKeys) {
-								if (o_addr.toString().equals(address.toString())) {
-									found = true;
-									break;
-								}
-							}
+							found = targetKeys.contains(o_addr.toString());
 
 							/*
 							 * If we found a target key in outputs stop
@@ -152,7 +143,7 @@ public class AddressFinder {
 									}
 								}
 								if (o_addr != null) {
-									keysTouching.add(o_addr);
+									keysTouching.add(o_addr.toString());
 								}
 							}
 						} else {
@@ -164,7 +155,7 @@ public class AddressFinder {
 								try {
 									//TODO what should we ACTUALLY do here?
 									Address in_Addr = tx_input.getFromAddress();
-									keysTouching.add(in_Addr);
+									keysTouching.add(in_Addr.toString());
 								} catch (ScriptException e) {
 									exceptionCount++;
 									break;
