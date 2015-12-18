@@ -38,6 +38,7 @@ public class AddressFinder {
 		return this.getKeysTouching(outputKeys, false);
 	}
 
+	//TODO this NEEDS to be done in parallel
 	private Set<String> getKeysTouching(Set<String> targetKeys, boolean targetIsInput) {
 		Set<String> keysTouching = new HashSet<String>();
 		int currentSearchDepth = 0;
