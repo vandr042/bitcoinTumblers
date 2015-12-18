@@ -6,10 +6,9 @@ import java.util.concurrent.ExecutionException;
 
 import org.bitcoinj.core.Block;
 import org.bitcoinj.core.Sha256Hash;
-import org.bitcoinj.core.StoredBlock;
 import org.bitcoinj.kits.WalletAppKit;
 import org.bitcoinj.params.MainNetParams;
-import org.bitcoinj.store.BlockStoreException;
+import org.bitcoinj.store.SPVBlockStore;
 
 public class SimpleBlockStore {
 
@@ -19,10 +18,10 @@ public class SimpleBlockStore {
 	private static final String DEFAULT_BASE_DIR = "./blockStore";
 	private static final boolean DEBUG = true;
 
-	public SimpleBlockStore(){
+	public SimpleBlockStore() {
 		this(SimpleBlockStore.DEFAULT_BASE_DIR);
 	}
-	
+
 	public SimpleBlockStore(String pathToBaseDir) {
 		this.baseDir = new File(pathToBaseDir);
 
@@ -42,16 +41,12 @@ public class SimpleBlockStore {
 	}
 
 	public List<Sha256Hash> getHashChain(int depth) {
-		StoredBlock currBlock = this.kit.chain().getChainHead();
+		Sha256Hash tempHash = this.kit.chain().getChainHead().getHeader().getHash();
+		Block currBlock = this.getBlock(tempHash);
 		List<Sha256Hash> retList = new ArrayList<Sha256Hash>(depth);
 		for (int counter = 0; counter < depth; counter++) {
-			retList.add(currBlock.getHeader().getHash());
-			try {
-				currBlock = currBlock.getPrev(this.kit.store());
-			} catch (BlockStoreException e) {
-				e.printStackTrace();
-				System.exit(-1);
-			}
+			retList.add(currBlock.getHash());
+			currBlock = this.getBlock(currBlock.getPrevBlockHash());
 		}
 		return retList;
 	}
@@ -99,4 +94,11 @@ public class SimpleBlockStore {
 		this.kit.awaitTerminated();
 	}
 
+	public static void main(String args[]) {
+		System.out.println(SPVBlockStore.DEFAULT_NUM_HEADERS);
+		SimpleBlockStore test = new SimpleBlockStore();
+		List<Sha256Hash> testList = test.getHashChain(10000);
+		System.out.println(testList.size());
+		test.done();
+	}
 }

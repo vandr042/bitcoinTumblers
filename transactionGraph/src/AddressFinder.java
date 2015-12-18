@@ -8,6 +8,7 @@ import java.util.*;
 
 public class AddressFinder {
 
+	private List<Sha256Hash> fullHashList;
 	private SimpleBlockStore bstore;
 
 	private static final int SEARCH_DEPTH = 60000;
@@ -15,6 +16,7 @@ public class AddressFinder {
 
 	public AddressFinder(NetworkParameters parameters) throws IOException {
 		this.bstore = new SimpleBlockStore("/export/scratch2/public/blockStore");
+		this.fullHashList = this.bstore.getHashChain(AddressFinder.SEARCH_DEPTH);
 	}
 
 	public Set<String> getKeysPaidBy(Set<String> inputKeys) {
@@ -27,14 +29,13 @@ public class AddressFinder {
 
 	private Set<String> getKeysTouching(Set<String> targetKeys, boolean targetIsInput) {
 		Set<String> keysTouching = new HashSet<String>();
-		List<Sha256Hash> fullHashList = this.bstore.getHashChain(AddressFinder.SEARCH_DEPTH);
 
 		List<List<Sha256Hash>> workLists = new ArrayList<List<Sha256Hash>>(AddressFinder.NTHREADS);
 		for (int counter = 0; counter < AddressFinder.NTHREADS; counter++) {
 			workLists.add(new LinkedList<Sha256Hash>());
 		}
 		int pos = 0;
-		for (Sha256Hash tHash : fullHashList) {
+		for (Sha256Hash tHash : this.fullHashList) {
 			workLists.get(pos % workLists.size()).add(tHash);
 			pos++;
 		}
