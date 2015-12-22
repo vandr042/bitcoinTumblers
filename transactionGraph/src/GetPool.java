@@ -81,6 +81,11 @@ public class GetPool {
 					}
 					singAccDK++;
 				} else {
+					try {
+						this.rejectOutput.write(tResult.toString() + "\n");
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
 					singRejDK++;
 				}
 			}
@@ -99,6 +104,11 @@ public class GetPool {
 					}
 					singAccPK++;
 				} else {
+					try {
+						this.rejectOutput.write(tResult.toString() + "\n");
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
 					singRejPK++;
 				}
 			}

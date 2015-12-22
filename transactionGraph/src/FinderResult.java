@@ -12,6 +12,20 @@ public class FinderResult {
 		this.outputs = new HashSet<String>();
 		this.timeStamp = ts;
 	}
+	
+	public String toString(){
+		StringBuilder strBuild = new StringBuilder();
+		strBuild.append(this.timeStamp.toString());
+		strBuild.append("\nin\n");
+		for(String tInput : this.inputs){
+			strBuild.append(tInput + "\n");
+		}
+		strBuild.append("out\n");
+		for(String tOutput : this.outputs){
+			strBuild.append(tOutput + "\n");
+		}
+		return strBuild.toString();
+	}
 
 	public void addInput(String key){
 		this.inputs.add(key);
