@@ -4,6 +4,7 @@ import java.util.concurrent.ExecutionException;
 
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Block;
+import org.bitcoinj.core.Context;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.ScriptException;
 import org.bitcoinj.core.Sha256Hash;
@@ -18,6 +19,7 @@ public class AddressFinderWorker implements Runnable {
 
 	private SimpleBlockStore bStore;
 	private NetworkParameters params;
+	private Context myCont;
 	private Set<String> targetKeys;
 	private boolean targetIsInput;
 	private List<Sha256Hash> myHashes;
@@ -28,8 +30,9 @@ public class AddressFinderWorker implements Runnable {
 	private int totalTx;
 
 	public AddressFinderWorker(Set<String> goalKeys, boolean targetsAreInputs, List<Sha256Hash> blockHashes,
-			SimpleBlockStore blocks) {
+			SimpleBlockStore blocks, Context bcjContext) {
 		this.bStore = blocks;
+		this.myCont = bcjContext;
 		this.params = MainNetParams.get();
 
 		this.targetKeys = goalKeys;
@@ -61,6 +64,8 @@ public class AddressFinderWorker implements Runnable {
 	@Override
 	public void run() {
 
+		Context.propagate(this.myCont);
+		
 		for (Sha256Hash tHash : this.myHashes) {
 			Block currentBlock = this.bStore.getBlock(tHash);
 			List<Transaction> tx_list = currentBlock.getTransactions();

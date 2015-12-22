@@ -42,7 +42,8 @@ public class AddressFinder {
 
 		AddressFinderWorker[] slaves = new AddressFinderWorker[AddressFinder.NTHREADS];
 		for (int counter = 0; counter < AddressFinder.NTHREADS; counter++) {
-			slaves[counter] = new AddressFinderWorker(targetKeys, targetIsInput, workLists.get(counter), this.bstore);
+			slaves[counter] = new AddressFinderWorker(targetKeys, targetIsInput, workLists.get(counter), this.bstore,
+					Context.get());
 		}
 		Thread[] threads = new Thread[AddressFinder.NTHREADS];
 		for (int counter = 0; counter < AddressFinder.NTHREADS; counter++) {
