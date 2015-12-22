@@ -15,7 +15,7 @@ public class AddressFinder {
 	private static final int NTHREADS = 10;
 
 	public AddressFinder(NetworkParameters parameters) throws IOException {
-		this.bstore = new SimpleBlockStore("/export/scratch2/public/blockStore");
+		this.bstore = new SimpleBlockStore("/export/scratch2/public/shardBS");
 		this.fullHashList = this.bstore.getHashChain(AddressFinder.SEARCH_DEPTH);
 	}
 
