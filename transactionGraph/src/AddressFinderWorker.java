@@ -22,7 +22,7 @@ public class AddressFinderWorker implements Runnable {
 	private boolean targetIsInput;
 	private List<Sha256Hash> myHashes;
 
-	private Set<String> results;
+	private Set<FinderResult> results;
 	private int inputExceptions;
 	private int outputExceptions;
 	private int totalTx;
@@ -36,13 +36,13 @@ public class AddressFinderWorker implements Runnable {
 		this.targetIsInput = targetsAreInputs;
 		this.myHashes = blockHashes;
 
-		this.results = new HashSet<String>();
+		this.results = new HashSet<FinderResult>();
 		this.inputExceptions = 0;
 		this.outputExceptions = 0;
 		this.totalTx = 0;
 	}
 
-	public Set<String> getResults() {
+	public Set<FinderResult> getResults() {
 		return this.results;
 	}
 
@@ -53,24 +53,15 @@ public class AddressFinderWorker implements Runnable {
 	public int getOutputExceptions() {
 		return this.outputExceptions;
 	}
-	
-	public int getTotalTx(){
+
+	public int getTotalTx() {
 		return this.totalTx;
 	}
 
 	@Override
 	public void run() {
-		int currentSearchDepth = 0;
-		int stepSize = (int) (Math.floor(this.myHashes.size()) / 10);
-		int currStep = 1;
 
 		for (Sha256Hash tHash : this.myHashes) {
-			currentSearchDepth++;
-			if (currentSearchDepth >= stepSize * currStep) {
-				System.out.println("" + currStep * 10 + "% done");
-				currStep++;
-			}
-
 			Block currentBlock = this.bStore.getBlock(tHash);
 			List<Transaction> tx_list = currentBlock.getTransactions();
 			this.totalTx += tx_list.size();
@@ -134,48 +125,50 @@ public class AddressFinderWorker implements Runnable {
 				}
 
 				if (found) {
-					if (targetIsInput) {
-						/*
-						 * Iterate across outputs harvesting the keys since at
-						 * least one input key matched a target
-						 */
-						for (TransactionOutput tx_o : tx.getOutputs()) {
-							Address o_addr = null;
+					FinderResult tResult = new FinderResult(tx.getUpdateTime());
+
+					/*
+					 * Iterate across outputs harvesting the keys since at least
+					 * one input key matched a target
+					 */
+					for (TransactionOutput tx_o : tx.getOutputs()) {
+						Address o_addr = null;
+						try {
+							o_addr = tx_o.getAddressFromP2PKHScript(params);
+						} catch (ScriptException e) {
+							this.outputExceptions++;
+							break;
+						}
+						if (o_addr == null) {
 							try {
-								o_addr = tx_o.getAddressFromP2PKHScript(params);
+								o_addr = tx_o.getAddressFromP2SH(params);
 							} catch (ScriptException e) {
 								this.outputExceptions++;
 								break;
 							}
-							if (o_addr == null) {
-								try {
-									o_addr = tx_o.getAddressFromP2SH(params);
-								} catch (ScriptException e) {
-									this.outputExceptions++;
-									break;
-								}
-							}
-							if (o_addr != null) {
-								this.results.add(o_addr.toString());
-							}
 						}
-					} else {
-						/*
-						 * Iterate across inputs adding them since at leaste on
-						 * output was in the target set
-						 */
-						for (TransactionInput tx_input : tx.getInputs()) {
-							try {
-								// TODO what should we ACTUALLY do here?
-								Address in_Addr = tx_input.getFromAddress();
-								this.results.add(in_Addr.toString());
-							} catch (ScriptException e) {
-								this.inputExceptions++;
-								break;
-							}
+						if (o_addr != null) {
+							tResult.addOutput(o_addr.toString());
 						}
 					}
+
+					/*
+					 * Iterate across inputs adding them since at leaste on
+					 * output was in the target set
+					 */
+					for (TransactionInput tx_input : tx.getInputs()) {
+						try {
+							// TODO what should we ACTUALLY do here?
+							Address in_Addr = tx_input.getFromAddress();
+							tResult.addInput(in_Addr.toString());
+						} catch (ScriptException e) {
+							this.inputExceptions++;
+							break;
+						}
+					}
+					this.results.add(tResult);
 				}
+
 			}
 		}
 	}

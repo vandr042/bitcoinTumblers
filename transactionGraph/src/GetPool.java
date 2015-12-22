@@ -42,7 +42,7 @@ public class GetPool {
 		}
 
 		Set<String> newDKeys = new HashSet<String>();
-		Set<String> newPKeys = null;
+		Set<String> newPKeys = new HashSet<String>();
 		newDKeys.add(seedDepositKey);
 		this.depKeys.add(seedDepositKey);
 		try {
@@ -57,6 +57,11 @@ public class GetPool {
 		long startTime = System.currentTimeMillis();
 		System.out.println("*****\nGet pool starting!!!!\n*****");
 		while (newDKeys.size() != 0) {
+			int singRejDK = 0;
+			int singAccDK = 0;
+			int singRejPK = 0;
+			int singAccPK = 0;
+			
 			long lapTime = System.currentTimeMillis();
 			rounds++;
 
@@ -65,18 +70,39 @@ public class GetPool {
 			 * all the pool keys we know about yielding the set of newly learned
 			 * pool keys, update our fully known set of pool keys after
 			 */
-			newPKeys = this.addrFinder.getKeysPaidBy(newDKeys);
+			Set<FinderResult> tempPKResult = this.addrFinder.getKeysPaidBy(newDKeys);
+			newPKeys.clear();
+			for (FinderResult tResult : tempPKResult) {
+				if (this.validateSingeltonTransaction(tResult)) {
+					for (String tPK : tResult.getOuputs()) {
+						newPKeys.add(tPK);
+					}
+					singAccDK++;
+				}else{
+					singRejDK++;
+				}
+			}
 			newPKeys.removeAll(this.poolKeys);
-			this.poolKeys.addAll(newPKeys);
+			
 
 			/*
 			 * Same game in the opposite direction getting our new set of
 			 * deposit keys
 			 */
-			newDKeys = this.addrFinder.getKeysPayingInto(newPKeys);
+			Set<FinderResult> tempDKResult = this.addrFinder.getKeysPayingInto(newPKeys);
+			newDKeys.clear();
+			for(FinderResult tResult: tempDKResult){
+				if(this.validateSingeltonTransaction(tResult)){
+					for(String tKey : tResult.getInputs()){
+						newDKeys.add(tKey);
+					}
+					singAccPK++;
+				}else{
+					singRejPK++;
+				}
+			}
 			newDKeys.removeAll(this.depKeys);
-			this.depKeys.addAll(newDKeys);
-
+			
 			/*
 			 * Dump our newly found keys to the correct files
 			 */
@@ -90,6 +116,12 @@ public class GetPool {
 				System.err.println("ABORTING SINCE FILE I/O FAILED");
 				break;
 			}
+			
+			/*
+			 * Update base sets
+			 */
+			this.poolKeys.addAll(newPKeys);
+			this.depKeys.addAll(newDKeys);
 
 			/*
 			 * Output some stats to console
@@ -98,12 +130,14 @@ public class GetPool {
 					.println("Round " + rounds + " took " + (System.currentTimeMillis() - lapTime) / 1000 + " seconds");
 			System.out.println("New pool keys " + newPKeys.size());
 			System.out.println("New deposit keys " + newDKeys.size());
+			System.out.println("Singleton pass/fail from deposit key: " + singAccDK + "/" + singRejDK);
+			System.out.println("Singleton pass/fail from deposit key: " + singAccPK + "/" + singRejPK);
 		}
 
 		/*
 		 * Clean up our I/O state
 		 */
-		this.addrFinder.done(); //terminates MaxBlockStore
+		this.addrFinder.done(); // terminates MaxBlockStore
 		try {
 			this.poolOutput.close();
 			this.depOutput.close();
@@ -118,6 +152,10 @@ public class GetPool {
 		System.out.println("Total deposit keys: " + this.depKeys.size());
 		this.ran = true;
 		return rounds;
+	}
+
+	public boolean validateSingeltonTransaction(FinderResult tResult) {
+		return tResult.getInputs().size() == 1 && tResult.getOuputs().size() == 1;
 	}
 
 	private void dumpSetToFile(Set<String> addrSet, BufferedWriter outFP) throws IOException {
