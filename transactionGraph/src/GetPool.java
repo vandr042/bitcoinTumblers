@@ -16,6 +16,7 @@ public class GetPool {
 
 	private BufferedWriter poolOutput;
 	private BufferedWriter depOutput;
+	private BufferedWriter rejectOutput;
 
 	private boolean ran;
 
@@ -28,6 +29,7 @@ public class GetPool {
 		this.poolKeys = new HashSet<String>();
 		this.poolOutput = new BufferedWriter(new FileWriter("pkeys.txt"));
 		this.depOutput = new BufferedWriter(new FileWriter("dkeys.txt"));
+		this.rejectOutput = new BufferedWriter(new FileWriter("reject.log"));
 		this.ran = false;
 	}
 
@@ -61,7 +63,7 @@ public class GetPool {
 			int singAccDK = 0;
 			int singRejPK = 0;
 			int singAccPK = 0;
-			
+
 			long lapTime = System.currentTimeMillis();
 			rounds++;
 
@@ -78,12 +80,11 @@ public class GetPool {
 						newPKeys.add(tPK);
 					}
 					singAccDK++;
-				}else{
+				} else {
 					singRejDK++;
 				}
 			}
 			newPKeys.removeAll(this.poolKeys);
-			
 
 			/*
 			 * Same game in the opposite direction getting our new set of
@@ -91,32 +92,35 @@ public class GetPool {
 			 */
 			Set<FinderResult> tempDKResult = this.addrFinder.getKeysPayingInto(newPKeys);
 			newDKeys.clear();
-			for(FinderResult tResult: tempDKResult){
-				if(this.validateSingeltonTransaction(tResult)){
-					for(String tKey : tResult.getInputs()){
+			for (FinderResult tResult : tempDKResult) {
+				if (this.validateSingeltonTransaction(tResult)) {
+					for (String tKey : tResult.getInputs()) {
 						newDKeys.add(tKey);
 					}
 					singAccPK++;
-				}else{
+				} else {
 					singRejPK++;
 				}
 			}
 			newDKeys.removeAll(this.depKeys);
-			
+
 			/*
 			 * Dump our newly found keys to the correct files
 			 */
 			try {
 				this.dumpSetToFile(newPKeys, this.poolOutput);
 				this.dumpSetToFile(newDKeys, this.depOutput);
+				this.rejectOutput.write("Singleton pass/fail from deposit key: " + singAccDK + "/" + singRejDK + "\n");
+				this.rejectOutput.write("Singleton pass/fail from deposit key: " + singAccPK + "/" + singRejPK + "\n");
 				this.poolOutput.flush();
 				this.depOutput.flush();
+				this.rejectOutput.flush();
 			} catch (IOException e) {
 				e.printStackTrace();
 				System.err.println("ABORTING SINCE FILE I/O FAILED");
 				break;
 			}
-			
+
 			/*
 			 * Update base sets
 			 */
@@ -141,6 +145,7 @@ public class GetPool {
 		try {
 			this.poolOutput.close();
 			this.depOutput.close();
+			this.rejectOutput.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 			System.err.println("FAILED TO CLOSE CLEANLY, SOME DATA MAY BE LOST!");
