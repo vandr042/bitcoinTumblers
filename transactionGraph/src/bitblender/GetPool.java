@@ -4,8 +4,7 @@ import bitcoinLink.AddressFinder;
 import bitcoinLink.FinderResult;
 
 import java.io.*;
-import java.util.Set;
-import java.util.HashSet;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 
 import org.bitcoinj.core.AddressFormatException;
@@ -19,6 +18,8 @@ public class GetPool {
 	private HashSet<String> depKeys;
 	private HashSet<String> poolKeys;
 
+	private HashMap<String, GetPool.ValidateResult> poolKeyTestResult;
+
 	private BufferedWriter poolOutput;
 	private BufferedWriter depOutput;
 	private BufferedWriter rejectOutput;
@@ -28,10 +29,17 @@ public class GetPool {
 	private static NetworkParameters PARAMS = MainNetParams.get();
 	private static final String KNOWN_DEP_KEY = "1Dv7uNrFYP8JfWo1b7oo14Xz6LjHrycYCj";
 
+	private static final int MIN_TX_PK_ID = 3;
+
+	private enum ValidateResult {
+		VALID, TOOSMALL, MULTIPLETIMES, TOOMANYDOUBLE, TOOLARGEOUTPUT, TOOLARGEINPUT, LACKSODDTX;
+	}
+
 	public GetPool() throws IOException, InterruptedException, ExecutionException {
 		this.addrFinder = new AddressFinder(GetPool.PARAMS);
 		this.depKeys = new HashSet<String>();
 		this.poolKeys = new HashSet<String>();
+		this.poolKeyTestResult = new HashMap<String, GetPool.ValidateResult>();
 		this.poolOutput = new BufferedWriter(new FileWriter("pkeys.txt"));
 		this.depOutput = new BufferedWriter(new FileWriter("dkeys.txt"));
 		this.rejectOutput = new BufferedWriter(new FileWriter("reject.log"));
@@ -48,8 +56,10 @@ public class GetPool {
 			throw new IllegalStateException("Can't run buildPool twice!");
 		}
 
+		/*
+		 * Prep the new deposit keys set
+		 */
 		Set<String> newDKeys = new HashSet<String>();
-		Set<String> newPKeys = new HashSet<String>();
 		newDKeys.add(seedDepositKey);
 		this.depKeys.add(seedDepositKey);
 		try {
@@ -64,57 +74,63 @@ public class GetPool {
 		long startTime = System.currentTimeMillis();
 		System.out.println("*****\nGet pool starting!!!!\n*****");
 		while (newDKeys.size() != 0) {
-			int singRejDK = 0;
-			int singAccDK = 0;
-			int singRejPK = 0;
-			int singAccPK = 0;
-
 			long lapTime = System.currentTimeMillis();
 			rounds++;
 
 			/*
-			 * Get all pool keys paid by this new push of deposit keys, remove
-			 * all the pool keys we know about yielding the set of newly learned
-			 * pool keys, update our fully known set of pool keys after
+			 * Map to store the number of times we reject a possible pool key
 			 */
-			Set<FinderResult> tempPKResult = this.addrFinder.getKeysPaidBy(newDKeys);
-			newPKeys.clear();
-			for (FinderResult tResult : tempPKResult) {
-				if (this.validateSingeltonTransaction(tResult)) {
-					for (String tPK : tResult.getOuputs()) {
-						newPKeys.add(tPK);
-					}
-					singAccDK++;
-				} else {
-					try {
-						this.rejectOutput.write(tResult.toString() + "\n");
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-					singRejDK++;
-				}
+			HashMap<GetPool.ValidateResult, Integer> rejectReason = new HashMap<GetPool.ValidateResult, Integer>();
+			for (GetPool.ValidateResult tReason : GetPool.ValidateResult.values()) {
+				rejectReason.put(tReason, 0);
 			}
-			newPKeys.removeAll(this.poolKeys);
+			Set<String> candidatePoolKeys = new HashSet<String>();
 
 			/*
-			 * Same game in the opposite direction getting our new set of
-			 * deposit keys
+			 * Get all pool keys paid by this new push of deposit keys, remove
+			 * all the pool keys we have tested in the past since there is no
+			 * need to test them again
 			 */
-			Set<FinderResult> tempDKResult = this.addrFinder.getKeysPayingInto(newPKeys);
+			Set<FinderResult> tempPKResult = this.addrFinder.getKeysPaidBy(newDKeys);
+			for (FinderResult tResult : tempPKResult) {
+				if (tResult.getInputs().size() == 1 && tResult.getOuputs().size() == 1) {
+					candidatePoolKeys.addAll(tResult.getOuputs());
+				}
+			}
+			candidatePoolKeys.removeAll(this.poolKeyTestResult.keySet());
+
+			/*
+			 * TODO we might want to do some more detailed sanity checking of
+			 * our dep keys
+			 */
+
+			/*
+			 * Get all txs that pay into the possible pool keys
+			 */
+			Set<FinderResult> tempDKResult = this.addrFinder.getKeysPayingInto(candidatePoolKeys);
+
+			/*
+			 * Filter out based on our current criteria
+			 */
+			Set<String> workingPKs = new HashSet<String>();
+			for (String testedKey : candidatePoolKeys) {
+				GetPool.ValidateResult myResult = this.validateSinglePushPoolKey(tempDKResult, testedKey);
+				this.poolKeyTestResult.put(testedKey, myResult);
+				if (myResult.equals(GetPool.ValidateResult.VALID)) {
+					workingPKs.add(testedKey);
+				} else {
+					rejectReason.put(myResult, rejectReason.get(myResult) + 1);
+				}
+			}
+			String failureSummary = this.getFailureString(rejectReason);
+
+			/*
+			 * Extra our new deposit keys, drop out any we already know about
+			 */
 			newDKeys.clear();
 			for (FinderResult tResult : tempDKResult) {
-				if (this.validateSingeltonTransaction(tResult)) {
-					for (String tKey : tResult.getInputs()) {
-						newDKeys.add(tKey);
-					}
-					singAccPK++;
-				} else {
-					try {
-						this.rejectOutput.write(tResult.toString() + "\n");
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-					singRejPK++;
+				if (tResult.cotainsAnyAsOutput(workingPKs)) {
+					newDKeys.addAll(tResult.getInputs());
 				}
 			}
 			newDKeys.removeAll(this.depKeys);
@@ -123,10 +139,9 @@ public class GetPool {
 			 * Dump our newly found keys to the correct files
 			 */
 			try {
-				this.dumpSetToFile(newPKeys, this.poolOutput);
+				this.dumpSetToFile(workingPKs, this.poolOutput);
 				this.dumpSetToFile(newDKeys, this.depOutput);
-				this.rejectOutput.write("Singleton pass/fail from deposit key: " + singAccDK + "/" + singRejDK + "\n");
-				this.rejectOutput.write("Singleton pass/fail from deposit key: " + singAccPK + "/" + singRejPK + "\n");
+				this.rejectOutput.write("" + rounds + "," + failureSummary);
 				this.poolOutput.flush();
 				this.depOutput.flush();
 				this.rejectOutput.flush();
@@ -139,7 +154,7 @@ public class GetPool {
 			/*
 			 * Update base sets
 			 */
-			this.poolKeys.addAll(newPKeys);
+			this.poolKeys.addAll(workingPKs);
 			this.depKeys.addAll(newDKeys);
 
 			/*
@@ -147,10 +162,9 @@ public class GetPool {
 			 */
 			System.out
 					.println("Round " + rounds + " took " + (System.currentTimeMillis() - lapTime) / 1000 + " seconds");
-			System.out.println("New pool keys " + newPKeys.size());
+			System.out.println(failureSummary);
+			System.out.println("New pool keys " + workingPKs.size());
 			System.out.println("New deposit keys " + newDKeys.size());
-			System.out.println("Singleton pass/fail from deposit key: " + singAccDK + "/" + singRejDK);
-			System.out.println("Singleton pass/fail from deposit key: " + singAccPK + "/" + singRejPK);
 		}
 
 		/*
@@ -173,9 +187,87 @@ public class GetPool {
 		this.ran = true;
 		return rounds;
 	}
+	
+	private String getFailureString(HashMap<GetPool.ValidateResult, Integer> failures){
+		StringBuilder strBuild = new StringBuilder();
+		for(GetPool.ValidateResult tReason: failures.keySet()){
+			strBuild.append(tReason.toString());
+			strBuild.append(":");
+			strBuild.append(failures.get(tReason).toString());
+			strBuild.append(",");
+		}
+		
+		String outStr = strBuild.toString();
+		return outStr.substring(0, outStr.length() - 1);
+	}
 
-	public boolean validateSingeltonTransaction(FinderResult tResult) {
-		return tResult.getInputs().size() == 1 && tResult.getOuputs().size() == 1;
+	private GetPool.ValidateResult validateSinglePushPoolKey(Set<FinderResult> parsedTxs, String possPK) {
+
+		/*
+		 * Walk the list of finder results, filter down to those which have the
+		 * possible key as an output
+		 */
+		Set<FinderResult> matchingTxs = new HashSet<FinderResult>();
+		for (FinderResult tResult : parsedTxs) {
+			if (tResult.containsOutput(possPK)) {
+				matchingTxs.add(tResult);
+			}
+		}
+
+		/*
+		 * Check if we have enough txs to confirm
+		 */
+		if (matchingTxs.size() < GetPool.MIN_TX_PK_ID) {
+			return GetPool.ValidateResult.TOOSMALL;
+		}
+
+		/*
+		 * Next filter point, we expect the pool keys to ONLY have one push into
+		 * them (so all txs that feed the pool key should have the same time
+		 * stamp since they should be in the same block)
+		 */
+		Date myDate = null;
+		for (FinderResult tResult : matchingTxs) {
+			if (myDate == null) {
+				myDate = tResult.getTimestamp();
+			} else {
+				if (tResult.getTimestamp().compareTo(myDate) != 0) {
+					return GetPool.ValidateResult.MULTIPLETIMES;
+				}
+			}
+		}
+
+		/*
+		 * Lastly we expect the transactions to pull from a single deposit key
+		 * and outside of the one "odd" transaction it should just put into the
+		 * pool key
+		 */
+		boolean seenDouble = false;
+		for (FinderResult tResult : matchingTxs) {
+			if (tResult.getOuputs().size() == 2) {
+				if (seenDouble) {
+					return GetPool.ValidateResult.TOOMANYDOUBLE;
+				} else {
+					seenDouble = true;
+				}
+			} else if (tResult.getOuputs().size() > 2) {
+				return GetPool.ValidateResult.TOOLARGEOUTPUT;
+			}
+
+			if (tResult.getInputs().size() > 1) {
+				return GetPool.ValidateResult.TOOLARGEINPUT;
+			}
+		}
+
+		/*
+		 * For now we reject if we don't see the odd double tx, might want to
+		 * consider dropping this in the future
+		 */
+		if (!seenDouble) {
+			return GetPool.ValidateResult.LACKSODDTX;
+		}
+
+		return GetPool.ValidateResult.VALID;
 	}
 
 	private void dumpSetToFile(Set<String> addrSet, BufferedWriter outFP) throws IOException {
