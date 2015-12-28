@@ -71,16 +71,26 @@ public class AddressFinder {
 		int totalInputException = 0;
 		int totalOutputException = 0;
 		int totalTx = 0;
+		Date earliestTX = null;
 		for (AddressFinderWorker tSlave : slaves) {
 			totalInputException += tSlave.getInputExceptions();
 			totalOutputException += tSlave.getOutputExceptions();
 			totalTx += tSlave.getTotalTx();
 			keysTouching.addAll(tSlave.getResults());
+			
+			if(earliestTX == null){
+				earliestTX = tSlave.getEarliestTxSeen();
+			}else{
+				if(earliestTX.compareTo(tSlave.getEarliestTxSeen()) > 0){
+					earliestTX = tSlave.getEarliestTxSeen();
+				}
+			}
 		}
 
 		System.out.println("total input exceptions " + totalInputException);
 		System.out.println("total output exceptions " + totalOutputException);
 		System.out.println("total tx " + totalTx);
+		System.out.println("earliest tx seen from: " + earliestTX.toString());
 		System.out.println("Time taken " + (stopTime - startTime) / 1000 + " seconds");
 
 		return keysTouching;

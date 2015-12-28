@@ -29,6 +29,7 @@ public class AddressFinderWorker implements Runnable {
 	private int inputExceptions;
 	private int outputExceptions;
 	private int totalTx;
+	private Date earliestTxSeen;
 
 	public AddressFinderWorker(Set<String> goalKeys, boolean targetsAreInputs, List<Sha256Hash> blockHashes,
 			SimpleBlockStore blocks, Context bcjContext) {
@@ -44,6 +45,7 @@ public class AddressFinderWorker implements Runnable {
 		this.inputExceptions = 0;
 		this.outputExceptions = 0;
 		this.totalTx = 0;
+		this.earliestTxSeen = null;
 	}
 
 	public Set<FinderResult> getResults() {
@@ -61,6 +63,10 @@ public class AddressFinderWorker implements Runnable {
 	public int getTotalTx() {
 		return this.totalTx;
 	}
+	
+	public Date getEarliestTxSeen(){
+		return this.earliestTxSeen;
+	}
 
 	@Override
 	public void run() {
@@ -73,6 +79,15 @@ public class AddressFinderWorker implements Runnable {
 			this.totalTx += tx_list.size();
 
 			for (Transaction tx : tx_list) {
+				Date txTS = tx.getUpdateTime();
+				if(this.earliestTxSeen == null){
+					this.earliestTxSeen = txTS;
+				}else{
+					if(this.earliestTxSeen.compareTo(txTS) > 0){
+						this.earliestTxSeen = txTS;
+					}
+				}
+				
 				boolean found = false;
 				if (targetIsInput) {
 					List<TransactionInput> tx_ilist = tx.getInputs();
@@ -131,7 +146,7 @@ public class AddressFinderWorker implements Runnable {
 				}
 
 				if (found) {
-					FinderResult tResult = new FinderResult(tx.getUpdateTime());
+					FinderResult tResult = new FinderResult(txTS);
 
 					/*
 					 * Iterate across outputs harvesting the keys since at least
