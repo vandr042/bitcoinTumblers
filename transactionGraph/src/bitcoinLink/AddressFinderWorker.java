@@ -78,8 +78,8 @@ public class AddressFinderWorker implements Runnable {
 			List<Transaction> tx_list = currentBlock.getTransactions();
 			this.totalTx += tx_list.size();
 
+			Date txTS = currentBlock.getTime();
 			for (Transaction tx : tx_list) {
-				Date txTS = tx.getUpdateTime();
 				if(this.earliestTxSeen == null){
 					this.earliestTxSeen = txTS;
 				}else{
