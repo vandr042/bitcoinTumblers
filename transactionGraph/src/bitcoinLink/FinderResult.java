@@ -2,6 +2,8 @@ package bitcoinLink;
 
 import java.util.*;
 
+import org.bitcoinj.core.Coin;
+
 public class FinderResult {
 
 	private Set<String> inputs;
@@ -60,9 +62,9 @@ public class FinderResult {
 		this.inputs.add(key);
 	}
 	
-	public void addOutput(String key, double payment){
+	public void addOutput(String key, Coin payment){
 		this.outputs.add(key);
-		this.payments.put(key, payment);
+		this.payments.put(key, ((double) payment.value / (double) 1e8));
 	}
 	
 	public Set<String> getInputs() {

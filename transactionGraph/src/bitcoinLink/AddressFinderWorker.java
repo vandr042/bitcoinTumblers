@@ -154,7 +154,7 @@ public class AddressFinderWorker implements Runnable {
 							}
 						}
 						if (o_addr != null) {
-							tResult.addOutput(o_addr.toString(), ((double) tx_o.getValue().value / (double) 1e8));
+							tResult.addOutput(o_addr.toString(), tx_o.getValue());
 						}
 					}
 
