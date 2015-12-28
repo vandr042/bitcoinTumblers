@@ -6,11 +6,13 @@ public class FinderResult {
 
 	private Set<String> inputs;
 	private Set<String> outputs;
+	private HashMap<String, Double> payments;
 	private Date timeStamp;
 
 	public FinderResult(Date ts) {
 		this.inputs = new HashSet<String>();
 		this.outputs = new HashSet<String>();
+		this.payments = new HashMap<String, Double>();
 		this.timeStamp = ts;
 	}
 	
@@ -58,8 +60,9 @@ public class FinderResult {
 		this.inputs.add(key);
 	}
 	
-	public void addOutput(String key){
+	public void addOutput(String key, double payment){
 		this.outputs.add(key);
+		this.payments.put(key, payment);
 	}
 	
 	public Set<String> getInputs() {
@@ -68,6 +71,14 @@ public class FinderResult {
 
 	public Set<String> getOuputs() {
 		return this.outputs;
+	}
+	
+	public double getPayment(String key){
+		if(!this.payments.containsKey(key)){
+			throw new RuntimeException("No such output key");
+		}
+		
+		return this.payments.get(key);
 	}
 
 	public Date getTimestamp() {

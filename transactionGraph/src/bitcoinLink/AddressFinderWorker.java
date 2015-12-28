@@ -66,7 +66,7 @@ public class AddressFinderWorker implements Runnable {
 	public void run() {
 
 		Context.propagate(this.myCont);
-		
+
 		for (Sha256Hash tHash : this.myHashes) {
 			Block currentBlock = this.bStore.getBlock(tHash);
 			List<Transaction> tx_list = currentBlock.getTransactions();
@@ -154,7 +154,7 @@ public class AddressFinderWorker implements Runnable {
 							}
 						}
 						if (o_addr != null) {
-							tResult.addOutput(o_addr.toString());
+							tResult.addOutput(o_addr.toString(), ((double) tx_o.getValue().value / (double) 1e8));
 						}
 					}
 
