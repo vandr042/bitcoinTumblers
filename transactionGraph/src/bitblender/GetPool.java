@@ -1,5 +1,8 @@
 package bitblender;
 
+import bitcoinLink.AddressFinder;
+import bitcoinLink.FinderResult;
+
 import java.io.*;
 import java.util.Set;
 import java.util.HashSet;

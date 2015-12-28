@@ -1,4 +1,4 @@
-package bitblender;
+package bitcoinLink;
 
 import org.bitcoinj.core.*;
 
