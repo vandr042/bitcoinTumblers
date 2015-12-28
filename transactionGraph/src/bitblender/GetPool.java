@@ -19,6 +19,8 @@ public class GetPool {
 	private HashSet<String> poolKeys;
 
 	private HashMap<String, GetPool.ValidateResult> poolKeyTestResult;
+	private HashMap<String, Double> incomingValue;
+	private HashMap<String, Date> dateFilled;
 
 	private BufferedWriter poolOutput;
 	private BufferedWriter depOutput;
@@ -40,6 +42,8 @@ public class GetPool {
 		this.depKeys = new HashSet<String>();
 		this.poolKeys = new HashSet<String>();
 		this.poolKeyTestResult = new HashMap<String, GetPool.ValidateResult>();
+		this.incomingValue = new HashMap<String, Double>();
+		this.dateFilled = new HashMap<String, Date>();
 		this.poolOutput = new BufferedWriter(new FileWriter("pkeys.txt"));
 		this.depOutput = new BufferedWriter(new FileWriter("dkeys.txt"));
 		this.rejectOutput = new BufferedWriter(new FileWriter("reject.log"));
@@ -73,6 +77,7 @@ public class GetPool {
 		int rounds = 0;
 		long startTime = System.currentTimeMillis();
 		System.out.println("*****\nGet pool starting!!!!\n*****");
+		double strangeMoney = 0.0;
 		while (newDKeys.size() != 0) {
 			long lapTime = System.currentTimeMillis();
 			rounds++;
@@ -117,6 +122,7 @@ public class GetPool {
 				GetPool.ValidateResult myResult = this.validateSinglePushPoolKey(tempDKResult, testedKey);
 				this.poolKeyTestResult.put(testedKey, myResult);
 				if (myResult.equals(GetPool.ValidateResult.VALID)) {
+					this.incomingValue.put(testedKey, 0.0);
 					workingPKs.add(testedKey);
 				} else {
 					rejectReason.put(myResult, rejectReason.get(myResult) + 1);
@@ -130,7 +136,22 @@ public class GetPool {
 			newDKeys.clear();
 			for (FinderResult tResult : tempDKResult) {
 				if (tResult.cotainsAnyAsOutput(workingPKs)) {
+					/*
+					 * Extract all of the deposit keys that paid in
+					 */
 					newDKeys.addAll(tResult.getInputs());
+					
+					/*
+					 * Harvest values
+					 */
+					for (String tOutputKey : tResult.getOuputs()) {
+						if (workingPKs.contains(tOutputKey)) {
+							this.incomingValue.put(tOutputKey,
+									this.incomingValue.get(tOutputKey) + tResult.getPayment(tOutputKey));
+						} else {
+							strangeMoney += tResult.getPayment(tOutputKey);
+						}
+					}
 				}
 			}
 			newDKeys.removeAll(this.depKeys);
@@ -139,7 +160,10 @@ public class GetPool {
 			 * Dump our newly found keys to the correct files
 			 */
 			try {
+				//TODO also record date filled
 				this.dumpSetToFile(workingPKs, this.poolOutput);
+				
+				//TODO maybe report a date here as well?
 				this.dumpSetToFile(newDKeys, this.depOutput);
 				this.rejectOutput.write("" + rounds + "," + failureSummary);
 				this.poolOutput.flush();
@@ -180,23 +204,53 @@ public class GetPool {
 			System.err.println("FAILED TO CLOSE CLEANLY, SOME DATA MAY BE LOST!");
 		}
 
+		/*
+		 * Print hunt summary
+		 */
 		System.out.println("*****\nGet pool completed in: " + (System.currentTimeMillis() - startTime) / 1000
 				+ " seconds\nTook " + rounds + " rounds\n*****");
 		System.out.println("Total pool keys: " + this.poolKeys.size());
 		System.out.println("Total deposit keys: " + this.depKeys.size());
+		
+		/*
+		 * Print date summary
+		 */
+		List<Date> allDates = new ArrayList<Date>(this.dateFilled.size());
+		for(String tPoolKey: this.dateFilled.keySet()){
+			allDates.add(this.dateFilled.get(tPoolKey));
+		}
+		Collections.sort(allDates);
+		System.out.println("Earliest date pool key seen: " + allDates.get(0).toString());
+		System.out.println("Most recent date pool key: " + allDates.get(allDates.size() - 1).toString());
+		
+		/*
+		 * Print value summary
+		 */
+		double goodMoney = 0.0;
+		double largestPK = 0.0;
+		for(String tPoolKey: this.incomingValue.keySet()){
+			goodMoney += this.incomingValue.get(tPoolKey);
+			if(this.incomingValue.get(tPoolKey) > largestPK){
+				largestPK = this.incomingValue.get(tPoolKey);
+			}
+		}
+		System.out.println("Good money: " + goodMoney);
+		System.out.println("Strange money: " + strangeMoney);
+		System.out.println("Largest pool key: " + largestPK);
+		
 		this.ran = true;
 		return rounds;
 	}
-	
-	private String getFailureString(HashMap<GetPool.ValidateResult, Integer> failures){
+
+	private String getFailureString(HashMap<GetPool.ValidateResult, Integer> failures) {
 		StringBuilder strBuild = new StringBuilder();
-		for(GetPool.ValidateResult tReason: failures.keySet()){
+		for (GetPool.ValidateResult tReason : failures.keySet()) {
 			strBuild.append(tReason.toString());
 			strBuild.append(":");
 			strBuild.append(failures.get(tReason).toString());
 			strBuild.append(",");
 		}
-		
+
 		String outStr = strBuild.toString();
 		return outStr.substring(0, outStr.length() - 1);
 	}
@@ -267,6 +321,11 @@ public class GetPool {
 			return GetPool.ValidateResult.LACKSODDTX;
 		}
 
+		/*
+		 * WE ARE VALID, going to do some fetching of info while it's easy and
+		 * then return that the key is a valid pool key
+		 */
+		this.dateFilled.put(possPK, myDate);
 		return GetPool.ValidateResult.VALID;
 	}
 
