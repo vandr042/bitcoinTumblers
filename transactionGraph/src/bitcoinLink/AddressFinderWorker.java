@@ -1,3 +1,4 @@
+package bitblender;
 
 import java.util.*;
 import java.util.concurrent.ExecutionException;

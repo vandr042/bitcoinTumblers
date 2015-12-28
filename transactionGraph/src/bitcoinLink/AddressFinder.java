@@ -1,3 +1,4 @@
+package bitblender;
 
 import org.bitcoinj.core.*;
 
