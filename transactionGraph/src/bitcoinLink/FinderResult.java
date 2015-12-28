@@ -27,6 +27,32 @@ public class FinderResult {
 		}
 		return strBuild.toString();
 	}
+	
+	public boolean cotainsAnyAsOutput(Set<String> keys){
+		for(String tKey: keys){
+			if(this.containsOutput(tKey)){
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public boolean containsAnyAsInput(Set<String> keys){
+		for(String tKey: keys){
+			if(this.containsInput(tKey)){
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public boolean containsOutput(String key){
+		return this.outputs.contains(key);
+	}
+	
+	public boolean containsInput(String key){
+		return this.inputs.contains(key);
+	}
 
 	public void addInput(String key){
 		this.inputs.add(key);
