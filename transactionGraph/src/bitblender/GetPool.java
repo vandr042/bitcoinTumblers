@@ -387,7 +387,7 @@ public class GetPool {
 	public static void main(String[] args)
 			throws AddressFormatException, InterruptedException, ExecutionException, BlockStoreException, IOException {
 		GetPool poolBuilder = new GetPool();
-		//poolBuilder.buildPool(GetPool.KNOWN_DEP_KEY);
-		poolBuilder.blindScan();
+		poolBuilder.buildPool(GetPool.KNOWN_DEP_KEY);
+		//poolBuilder.blindScan();
 	}
 }
