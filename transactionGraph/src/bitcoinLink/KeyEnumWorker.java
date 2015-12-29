@@ -32,6 +32,7 @@ public class KeyEnumWorker implements Runnable {
 		this.recordInputs = wantInputs;
 		this.bStore = blockStore;
 		this.params = MainNetParams.get();
+		this.myContex = bcjContext;
 
 		this.results = new HashSet<String>();
 		this.earliestTxSeen = null;
