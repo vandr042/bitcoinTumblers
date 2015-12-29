@@ -13,8 +13,8 @@ public class AddressFinder {
 	private List<List<Sha256Hash>> workLists;
 	private SimpleBlockStore bstore;
 
-	private static final int SEARCH_DEPTH = 90000;
-	private static final int NTHREADS = 10;
+	public static final int SEARCH_DEPTH = 90000;
+	public static final int NTHREADS = 10;
 
 	public AddressFinder(NetworkParameters parameters) throws IOException {
 		this.bstore = new SimpleBlockStore("/export/scratch2/public/shardBS");

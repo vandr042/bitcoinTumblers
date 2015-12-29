@@ -2,13 +2,16 @@ package bitblender;
 
 import bitcoinLink.AddressFinder;
 import bitcoinLink.FinderResult;
+import blockStore.SimpleBlockStore;
 
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 
 import org.bitcoinj.core.AddressFormatException;
+import org.bitcoinj.core.Context;
 import org.bitcoinj.core.NetworkParameters;
+import org.bitcoinj.core.Sha256Hash;
 import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.store.BlockStoreException;
 
@@ -50,45 +53,90 @@ public class GetPool {
 		this.ran = false;
 	}
 
-	public void blindScan() {
-		Set<String> allKeysPaid = this.addrFinder.getAllOutputKeys();
+	public static void blindScan() throws IOException{
 
-		int splitSize = 100;
-		List<Set<String>> rounds = new ArrayList<Set<String>>(splitSize);
-		for (int counter = 0; counter < splitSize; counter++) {
-			rounds.add(new HashSet<String>());
+		SimpleBlockStore bstore = new SimpleBlockStore("/export/scratch2/public/shardBS");
+		List<Sha256Hash> fullHashList = bstore.getHashChain(AddressFinder.SEARCH_DEPTH);
+
+		List<List<Sha256Hash>> workLists = new ArrayList<List<Sha256Hash>>(AddressFinder.NTHREADS);
+		for (int counter = 0; counter < AddressFinder.NTHREADS; counter++) {
+			workLists.add(new LinkedList<Sha256Hash>());
 		}
 		int pos = 0;
-		for (String tKey : allKeysPaid) {
-			rounds.get(pos).add(tKey);
-			pos = (pos + 1) % splitSize;
+		for (Sha256Hash tHash : fullHashList) {
+			workLists.get(pos % workLists.size()).add(tHash);
+			pos++;
 		}
 
-		Set<String> foundKeys = new HashSet<String>();
-		long startTime = System.currentTimeMillis();
-		for (Set<String> tKeySet : rounds) {
-			Set<FinderResult> relevantTx = this.addrFinder.getKeysPayingInto(tKeySet);
+		PoolHuntWorker[] slaves = new PoolHuntWorker[AddressFinder.NTHREADS];
+		for (int counter = 0; counter < AddressFinder.NTHREADS; counter++) {
+			slaves[counter] = new PoolHuntWorker(workLists.get(counter), Context.get(), bstore);
+		}
 
-			for (String tKey : tKeySet) {
-				if (this.validateSinglePushPoolKey(relevantTx, tKey) == GetPool.ValidateResult.VALID) {
-					foundKeys.add(tKey);
+		Thread[] slaveThreads = new Thread[AddressFinder.NTHREADS];
+		for (int counter = 0; counter < AddressFinder.NTHREADS; counter++) {
+			slaveThreads[counter] = new Thread(slaves[counter]);
+			slaveThreads[counter].start();
+		}
+		for (Thread tThread : slaveThreads) {
+			try {
+				tThread.join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+
+		Set<String> masterReject = new HashSet<String>();
+		for (PoolHuntWorker tSlave : slaves) {
+			masterReject.addAll(tSlave.getRejected());
+		}
+		HashMap<String, Date> dateSeen = new HashMap<String, Date>();
+		HashMap<String, Boolean> seenOddTx = new HashMap<String, Boolean>();
+		HashMap<String, Integer> timesSeen = new HashMap<String, Integer>();
+		for (PoolHuntWorker tSlave : slaves) {
+			HashMap<String, Date> tempDate = tSlave.getDateSeen();
+			HashMap<String, Boolean> tempOdd = tSlave.getOddTxSeen();
+			HashMap<String, Integer> tempSeen = tSlave.getTimesSeen();
+
+			for (String tKey : tempDate.keySet()) {
+				if (masterReject.contains(tKey)) {
+					continue;
+				}
+
+				if (!dateSeen.containsKey(tKey)) {
+					dateSeen.put(tKey, tempDate.get(tKey));
+					seenOddTx.put(tKey, tempOdd.get(tKey));
+					timesSeen.put(tKey, tempSeen.get(tKey));
+				} else {
+					if (dateSeen.get(tKey).compareTo(tempDate.get(tKey)) == 0
+							&& !(seenOddTx.get(tKey) && tempOdd.get(tKey))) {
+						seenOddTx.put(tKey, seenOddTx.get(tKey) || tempOdd.get(tKey));
+						timesSeen.put(tKey, timesSeen.get(tKey) + tempSeen.get(tKey));
+					}else{
+						masterReject.add(tKey);
+						dateSeen.remove(tKey);
+						seenOddTx.remove(tKey);
+						timesSeen.remove(tKey);
+					}
 				}
 			}
 		}
-		long stopTime = System.currentTimeMillis();
 		
-		System.out.println("Blind scan took " + (stopTime - startTime)/60000 + " minutes.");
-		System.out.println("Found " + foundKeys.size());
-
-		try {
-			BufferedWriter outFP = new BufferedWriter(new FileWriter("blindPookKeys.txt"));
-			for(String tWorking : foundKeys){
-				outFP.write(tWorking + "\n");
+		Set<String> possPKs = new HashSet<String>();
+		for(String tKey: seenOddTx.keySet()){
+			if(timesSeen.get(tKey) > GetPool.MIN_TX_PK_ID && seenOddTx.get(tKey)){
+				possPKs.add(tKey);
+			}else{
+				masterReject.add(tKey);
 			}
-			outFP.close();
-		} catch (IOException e) {
-			e.printStackTrace();
 		}
+		System.out.println("Blind scan found " + possPKs.size());
+		System.out.println("Blind scan rejected " + masterReject.size());
+		BufferedWriter outFP = new BufferedWriter(new FileWriter("blindPKs.txt"));
+		for(String possPK: possPKs){
+			outFP.write(possPK + "\n");
+		}
+		outFP.close();
 	}
 
 	/*
@@ -388,6 +436,6 @@ public class GetPool {
 			throws AddressFormatException, InterruptedException, ExecutionException, BlockStoreException, IOException {
 		GetPool poolBuilder = new GetPool();
 		poolBuilder.buildPool(GetPool.KNOWN_DEP_KEY);
-		//poolBuilder.blindScan();
+		// poolBuilder.blindScan();
 	}
 }
