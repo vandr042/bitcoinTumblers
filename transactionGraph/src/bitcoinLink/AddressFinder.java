@@ -13,7 +13,7 @@ public class AddressFinder {
 	private List<List<Sha256Hash>> workLists;
 	private SimpleBlockStore bstore;
 
-	private static final int SEARCH_DEPTH = 10000;
+	private static final int SEARCH_DEPTH = 60000;
 	private static final int NTHREADS = 10;
 
 	public AddressFinder(NetworkParameters parameters) throws IOException {
