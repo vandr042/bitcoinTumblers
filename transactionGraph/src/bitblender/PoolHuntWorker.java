@@ -51,35 +51,37 @@ public class PoolHuntWorker implements Runnable {
 				}
 
 				for (String tKey : outputKeys) {
-					//FIXME odd tx check
 					if (!this.timesSeen.containsKey(tKey)) {
 						this.timesSeen.put(tKey, 1);
 						this.dateFilled.put(tKey, blockDate);
+						this.oddTxSeen.put(tKey, outputKeys.size() == 2);
 					} else {
-						if (this.dateFilled.get(tKey).compareTo(blockDate) != 0) {
+						if (this.dateFilled.get(tKey).compareTo(blockDate) != 0
+								|| (this.oddTxSeen.get(tKey) && outputKeys.size() == 2)) {
 							this.reject(tKey);
 						} else {
 							this.timesSeen.put(tKey, this.timesSeen.get(tKey) + 1);
+							this.oddTxSeen.put(tKey, this.oddTxSeen.get(tKey) || outputKeys.size() == 2);
 						}
 					}
 				}
 			}
 		}
 	}
-	
-	public Set<String> getRejected(){
+
+	public Set<String> getRejected() {
 		return this.rejected;
 	}
-	
-	public HashMap<String, Date> getDateSeen(){
+
+	public HashMap<String, Date> getDateSeen() {
 		return this.dateFilled;
 	}
-	
-	public HashMap<String, Integer> getTimesSeen(){
+
+	public HashMap<String, Integer> getTimesSeen() {
 		return this.timesSeen;
 	}
-	
-	public HashMap<String, Boolean> getOddTxSeen(){
+
+	public HashMap<String, Boolean> getOddTxSeen() {
 		return this.oddTxSeen;
 	}
 
@@ -87,13 +89,12 @@ public class PoolHuntWorker implements Runnable {
 		this.rejected.add(rejectedKey);
 		this.dateFilled.remove(rejectedKey);
 		this.timesSeen.remove(rejectedKey);
+		this.oddTxSeen.remove(rejectedKey);
 	}
 
 	private void rejectAll(List<String> rejectList) {
-		rejected.addAll(rejectList);
-		for (String tKey : rejectList) {
-			this.dateFilled.remove(tKey);
-			this.timesSeen.remove(tKey);
+		for(String tKey: rejectList){
+			this.reject(tKey);
 		}
 	}
 
