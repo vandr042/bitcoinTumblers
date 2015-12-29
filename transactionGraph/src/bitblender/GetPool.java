@@ -50,6 +50,47 @@ public class GetPool {
 		this.ran = false;
 	}
 
+	public void blindScan() {
+		Set<String> allKeysPaid = this.addrFinder.getAllOutputKeys();
+
+		int splitSize = 100;
+		List<Set<String>> rounds = new ArrayList<Set<String>>(splitSize);
+		for (int counter = 0; counter < splitSize; counter++) {
+			rounds.add(new HashSet<String>());
+		}
+		int pos = 0;
+		for (String tKey : allKeysPaid) {
+			rounds.get(pos).add(tKey);
+			pos = (pos + 1) % splitSize;
+		}
+
+		Set<String> foundKeys = new HashSet<String>();
+		long startTime = System.currentTimeMillis();
+		for (Set<String> tKeySet : rounds) {
+			Set<FinderResult> relevantTx = this.addrFinder.getKeysPayingInto(tKeySet);
+
+			for (String tKey : tKeySet) {
+				if (this.validateSinglePushPoolKey(relevantTx, tKey) == GetPool.ValidateResult.VALID) {
+					foundKeys.add(tKey);
+				}
+			}
+		}
+		long stopTime = System.currentTimeMillis();
+		
+		System.out.println("Blind scan took " + (stopTime - startTime)/60000 + " minutes.");
+		System.out.println("Found " + foundKeys.size());
+
+		try {
+			BufferedWriter outFP = new BufferedWriter(new FileWriter("blindPookKeys.txt"));
+			for(String tWorking : foundKeys){
+				outFP.write(tWorking + "\n");
+			}
+			outFP.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
 	/*
 	 * takes in a pool key and builds sets of pool keys and deposit keys by
 	 * calling getOutputs and getInputs until no new pool keys or deposit keys
@@ -140,7 +181,7 @@ public class GetPool {
 					 * Extract all of the deposit keys that paid in
 					 */
 					newDKeys.addAll(tResult.getInputs());
-					
+
 					/*
 					 * Harvest values
 					 */
@@ -160,10 +201,10 @@ public class GetPool {
 			 * Dump our newly found keys to the correct files
 			 */
 			try {
-				//TODO also record date filled
+				// TODO also record date filled
 				this.dumpSetToFile(workingPKs, this.poolOutput);
-				
-				//TODO maybe report a date here as well?
+
+				// TODO maybe report a date here as well?
 				this.dumpSetToFile(newDKeys, this.depOutput);
 				this.rejectOutput.write("" + rounds + "," + failureSummary);
 				this.poolOutput.flush();
@@ -211,33 +252,33 @@ public class GetPool {
 				+ " seconds\nTook " + rounds + " rounds\n*****");
 		System.out.println("Total pool keys: " + this.poolKeys.size());
 		System.out.println("Total deposit keys: " + this.depKeys.size());
-		
+
 		/*
 		 * Print date summary
 		 */
 		List<Date> allDates = new ArrayList<Date>(this.dateFilled.size());
-		for(String tPoolKey: this.dateFilled.keySet()){
+		for (String tPoolKey : this.dateFilled.keySet()) {
 			allDates.add(this.dateFilled.get(tPoolKey));
 		}
 		Collections.sort(allDates);
 		System.out.println("Earliest date pool key seen: " + allDates.get(0).toString());
 		System.out.println("Most recent date pool key: " + allDates.get(allDates.size() - 1).toString());
-		
+
 		/*
 		 * Print value summary
 		 */
 		double goodMoney = 0.0;
 		double largestPK = 0.0;
-		for(String tPoolKey: this.incomingValue.keySet()){
+		for (String tPoolKey : this.incomingValue.keySet()) {
 			goodMoney += this.incomingValue.get(tPoolKey);
-			if(this.incomingValue.get(tPoolKey) > largestPK){
+			if (this.incomingValue.get(tPoolKey) > largestPK) {
 				largestPK = this.incomingValue.get(tPoolKey);
 			}
 		}
 		System.out.println("Good money: " + goodMoney);
 		System.out.println("Strange money: " + strangeMoney);
 		System.out.println("Largest pool key: " + largestPK);
-		
+
 		this.ran = true;
 		return rounds;
 	}
@@ -346,6 +387,7 @@ public class GetPool {
 	public static void main(String[] args)
 			throws AddressFormatException, InterruptedException, ExecutionException, BlockStoreException, IOException {
 		GetPool poolBuilder = new GetPool();
-		poolBuilder.buildPool(GetPool.KNOWN_DEP_KEY);
+		//poolBuilder.buildPool(GetPool.KNOWN_DEP_KEY);
+		poolBuilder.blindScan();
 	}
 }
