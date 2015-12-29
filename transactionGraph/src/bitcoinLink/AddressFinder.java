@@ -9,7 +9,8 @@ import java.util.*;
 
 public class AddressFinder {
 
-	private List<Sha256Hash> fullHashList;
+
+	private List<List<Sha256Hash>> workLists;
 	private SimpleBlockStore bstore;
 
 	private static final int SEARCH_DEPTH = 10000;
@@ -17,7 +18,74 @@ public class AddressFinder {
 
 	public AddressFinder(NetworkParameters parameters) throws IOException {
 		this.bstore = new SimpleBlockStore("/export/scratch2/public/shardBS");
-		this.fullHashList = this.bstore.getHashChain(AddressFinder.SEARCH_DEPTH);
+		List<Sha256Hash> fullHashList = this.bstore.getHashChain(AddressFinder.SEARCH_DEPTH);
+		
+		this.workLists = new ArrayList<List<Sha256Hash>>(AddressFinder.NTHREADS);
+		for (int counter = 0; counter < AddressFinder.NTHREADS; counter++) {
+			workLists.add(new LinkedList<Sha256Hash>());
+		}
+		int pos = 0;
+		for (Sha256Hash tHash : fullHashList) {
+			workLists.get(pos % workLists.size()).add(tHash);
+			pos++;
+		}
+	}
+	
+	public Set<String> getAllInputKeys(){
+		return this.getAllKeys(true);
+	}
+	
+	public Set<String> getAllOutputKeys(){
+		return this.getAllKeys(false);
+	}
+	
+	private Set<String> getAllKeys(boolean targetIsInput){
+		Set<String> mergedResults = new HashSet<String>();
+		
+		KeyEnumWorker[] slaves = new KeyEnumWorker[AddressFinder.NTHREADS];
+		for (int counter = 0; counter < AddressFinder.NTHREADS; counter++) {
+			slaves[counter] = new KeyEnumWorker(this.workLists.get(counter), targetIsInput, this.bstore, Context.get());
+		}
+		Thread[] threads = new Thread[AddressFinder.NTHREADS];
+		for (int counter = 0; counter < AddressFinder.NTHREADS; counter++) {
+			threads[counter] = new Thread(slaves[counter]);
+		}
+
+		/*
+		 * Start threads and wait for them to finish
+		 */
+		long startTime = System.currentTimeMillis();
+		for (Thread tThread : threads) {
+			tThread.start();
+		}
+		for (Thread tThread : threads) {
+			try {
+				tThread.join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+				System.exit(-1);
+			}
+		}
+		long stopTime = System.currentTimeMillis();
+		
+		Date earliestTX = null;
+		for (KeyEnumWorker tSlave : slaves) {
+			mergedResults.addAll(tSlave.getResults());
+			
+			if(earliestTX == null){
+				earliestTX = tSlave.getEarliestBlock();
+			}else{
+				if(earliestTX.compareTo(tSlave.getEarliestBlock()) > 0){
+					earliestTX = tSlave.getEarliestBlock();
+				}
+			}
+		}
+		
+		System.out.println("Keys found: " + mergedResults.size());
+		System.out.println("earliest tx seen from: " + earliestTX.toString());
+		System.out.println("Time taken " + (stopTime - startTime) / 1000 + " seconds");
+		
+		return mergedResults;
 	}
 
 	public Set<FinderResult> getKeysPaidBy(Set<String> inputKeys) {
@@ -30,16 +98,6 @@ public class AddressFinder {
 
 	private Set<FinderResult> getKeysTouching(Set<String> targetKeys, boolean targetIsInput) {
 		Set<FinderResult> keysTouching = new HashSet<FinderResult>();
-
-		List<List<Sha256Hash>> workLists = new ArrayList<List<Sha256Hash>>(AddressFinder.NTHREADS);
-		for (int counter = 0; counter < AddressFinder.NTHREADS; counter++) {
-			workLists.add(new LinkedList<Sha256Hash>());
-		}
-		int pos = 0;
-		for (Sha256Hash tHash : this.fullHashList) {
-			workLists.get(pos % workLists.size()).add(tHash);
-			pos++;
-		}
 
 		AddressFinderWorker[] slaves = new AddressFinderWorker[AddressFinder.NTHREADS];
 		for (int counter = 0; counter < AddressFinder.NTHREADS; counter++) {
