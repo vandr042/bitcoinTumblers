@@ -1,19 +1,19 @@
 package data;
 
-import org.bitcoinj.core.PeerAddress;
+import org.bitcoinj.core.Peer;
 
 public class PeerTimePair implements Comparable<PeerTimePair> {
 
-	private PeerAddress myAddr;
+	private Peer myPeer;
 	private long myTime;
 
-	public PeerTimePair(PeerAddress addr, long time) {
-		this.myAddr = addr;
+	public PeerTimePair(Peer peer, long time) {
+		this.myPeer = peer;
 		this.myTime = time;
 	}
 	
-	public PeerAddress getAddress(){
-		return this.myAddr;
+	public Peer getPeer(){
+		return this.myPeer;
 	}
 	
 	public long getTime(){
@@ -21,7 +21,7 @@ public class PeerTimePair implements Comparable<PeerTimePair> {
 	}
 
 	public int hashCode(){
-		return this.myAddr.hashCode();
+		return this.myPeer.getAddress().hashCode();
 	}
 	
 	public boolean equals(Object rhs) {
@@ -30,7 +30,7 @@ public class PeerTimePair implements Comparable<PeerTimePair> {
 		}
 
 		PeerTimePair rhsObj = (PeerTimePair) rhs;
-		return this.myAddr.equals(rhsObj.myAddr);
+		return this.myPeer.getAddress().equals(rhsObj.myPeer.getAddress());
 	}
 
 	public int compareTo(PeerTimePair rhs) {
