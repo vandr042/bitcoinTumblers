@@ -4,6 +4,7 @@ import java.net.SocketAddress;
 import java.util.*;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -15,8 +16,8 @@ import org.bitcoinj.core.VersionMessage;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
-import data.PeerPool;
-import data.PeerTimePair;
+import data.PeerRecord;
+import data.PeerAddressTimePair;
 import listeners.ConnTestSlave;
 import listeners.DeadPeerListener;
 
@@ -28,18 +29,25 @@ public class ConnectionTester implements Runnable {
 
 	private Set<PeerAddress> pendingTests;
 	private Semaphore pendingWall;
+	private int step;
+
+	private PriorityBlockingQueue<PeerAddressTimePair> harvestedPeers;
+	private PriorityBlockingQueue<PeerAddressTimePair> unsolicitedPeers;
+	private PriorityBlockingQueue<PeerAddressTimePair> disconnectedPeers;
 
 	private static final int MAX_PEERS_TO_TEST = 2000;
-	private static final int LOWER_BOUND_PEERS_TO_TEST = 800;
-	private static final long SLEEP_TIME_SEC = 60;
 	private static final long TOO_SOON_SEC = 1800;
 
 	public ConnectionTester(Manager parent) {
 		this.myParent = parent;
 		this.version = new VersionMessage(this.myParent.getParams(), 0);
 
-		this.pendingTests = new HashSet<PeerAddress>();
-		this.pendingWall = new Semaphore(0);
+		this.harvestedPeers = new PriorityBlockingQueue<PeerAddressTimePair>();
+		this.unsolicitedPeers = new PriorityBlockingQueue<PeerAddressTimePair>();
+		this.disconnectedPeers = new PriorityBlockingQueue<PeerAddressTimePair>();
+
+		this.pendingWall = new Semaphore(ConnectionTester.MAX_PEERS_TO_TEST);
+		this.step = 0;
 
 		/*
 		 * We need very few threads as the action of recording success/failure
@@ -49,52 +57,61 @@ public class ConnectionTester implements Runnable {
 		this.connTestPool = new ThreadPoolExecutor(1, 2, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
 	}
 
+	public void giveNewNode(PeerAddress addr, long ts, boolean unsolicited) {
+		/*
+		 * TODO check that these queues remain "sane" in size
+		 */
+		PeerAddressTimePair tmpPair = null;
+		if (unsolicited) {
+			/*
+			 * We prioritize the most recently learned unsolicted addrs, so
+			 * invert the TS
+			 */
+			tmpPair = new PeerAddressTimePair(addr, ts * -1);
+			this.unsolicitedPeers.offer(tmpPair);
+		} else {
+			tmpPair = new PeerAddressTimePair(addr, ts);
+			this.harvestedPeers.offer(tmpPair);
+		}
+	}
+
 	public void run() {
-		PeerPool peers = this.myParent.getPeerPool();
-		Set<PeerAddress> testPeers = null;
-		int wallCount = 0;
 
 		while (true) {
+			try {
+				this.pendingWall.acquire();
 
-			synchronized (this) {
-				List<PeerTimePair> testBase = peers.getConnectionCandidates();
-				testPeers = this.filterPeerTest(testBase);
-				this.pendingTests.addAll(testPeers);
-				this.myParent.logEvent(testPeers.size() + " peers to attempt to connect to");
-
-				for (PeerAddress testPeer : testPeers) {
-					Peer peerObj = new Peer(this.myParent.getParams(), this.version, testPeer, null, false);
-					ConnTestSlave testSlave = new ConnTestSlave(peerObj, this);
-					ListenableFuture<SocketAddress> connFuture = this.myParent.getNIOClient()
-							.openConnection(testPeer.getSocketAddress(), peerObj);
-					Futures.addCallback(connFuture, testSlave, this.connTestPool);
-				}
-
-				this.pendingWall.drainPermits();
-				wallCount = this.pendingTests.size() - ConnectionTester.LOWER_BOUND_PEERS_TO_TEST;
-			}
-
-			if (testPeers.size() == 0 || wallCount < 0) {
 				/*
-				 * We had no new things to test, give it a rest for a bit...
+				 * Get the next peer to test
 				 */
-				try {
-					this.myParent.logEvent("Connection tester exhuasted, going to sleep.");
-					Thread.sleep(SLEEP_TIME_SEC * 1000);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-					break;
+				PeerAddress toTest = null;
+				while (toTest == null) {
+					// TODO integrate reconnection
+					// TODO check we're not trying a node too soon again
+					// TODO how do we refill this once we test all the nodes?
+
+					PeerAddressTimePair testPull = this.unsolicitedPeers.poll();
+					if (testPull == null) {
+						testPull = this.harvestedPeers.take();
+					}
+
+					PeerRecord tRecord = this.myParent.getRecord(testPull.getAddress());
+					if (tRecord.attemptConnectionStart()) {
+						toTest = tRecord.getMyAddr();
+					}
 				}
-			} else {
+
 				/*
-				 * Wait for results until we're at our "refill" point
+				 * Actually spin the test up
 				 */
-				try {
-					this.myParent.logEvent("Connection tester blocking till open capacity.");
-					this.pendingWall.acquire(wallCount);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
+				Peer peerObj = new Peer(this.myParent.getParams(), this.version, toTest, null, false);
+				ConnTestSlave testSlave = new ConnTestSlave(peerObj, this);
+				ListenableFuture<SocketAddress> connFuture = this.myParent.getNIOClient()
+						.openConnection(toTest.getSocketAddress(), peerObj);
+				Futures.addCallback(connFuture, testSlave, this.connTestPool);
+
+			} catch (InterruptedException e) {
+				this.myParent.logException(e.getLocalizedMessage());
 			}
 		}
 	}
@@ -105,84 +122,24 @@ public class ConnectionTester implements Runnable {
 		}
 	}
 
-	/*
-	 * NONE OF THIS SHOULD BE THREAD SAFE, we're already locking in the
-	 * place that calls this
-	 */
-	private Set<PeerAddress> filterPeerTest(List<PeerTimePair> testBase) {
-		
-		/*
-		 * Remove all peers we're actively testing
-		 */
-		int searchPos = 0;
-		while (searchPos < testBase.size()) {
-			if (this.pendingTests.contains(testBase.get(searchPos).getAddress())) {
-				testBase.remove(searchPos);
-			} else {
-				searchPos++;
-			}
-		}
-
-		/*
-		 * Ensure we're not hurling too many tests at once at us and that we're
-		 * not trying too soon
-		 */
-		Set<PeerAddress> testAddrs = new HashSet<PeerAddress>();
-		long currTime = System.currentTimeMillis();
-		for (int pos = 0; pos < testBase.size(); pos++) {
-			/*
-			 * Too soon check
-			 */
-			if (currTime - testBase.get(pos).getTime() < ConnectionTester.TOO_SOON_SEC * 1000) {
-				break;
-			}
-
-			/*
-			 * size of testing load check
-			 */
-			if (testAddrs.size() + this.pendingTests.size() >= ConnectionTester.MAX_PEERS_TO_TEST) {
-				break;
-			}
-
-			testAddrs.add(testBase.get(pos).getAddress());
-		}
-
-		return testAddrs;
-	}
-
 	public void reportFailedPeer(Peer failedPeer, String reason) {
 
 		/*
 		 * Record the failure time and remove pending test
 		 */
-		synchronized (this) {
-			this.myParent.getPeerPool().signalFailedConnect(failedPeer.getAddress());
-			this.pendingTests.remove(failedPeer.getAddress());
-			this.pendingWall.release();
-		}
-
-		/*
-		 * Log failure
-		 */
+		this.myParent.getRecord(failedPeer.getAddress()).signalConnectionFailed();
+		this.pendingWall.release();
 		this.myParent.logEvent("failed " + failedPeer.getAddress().toString() + " - " + reason);
 	}
 
 	public void reportWorkingPeer(Peer workingPeer) {
 
-		/*
-		 * Update our state and peer pool
-		 */
-		synchronized (this) {
-			this.myParent.getPeerPool().signalConnected(workingPeer.getAddress(), workingPeer);
-			this.pendingTests.remove(workingPeer.getAddress());
-			this.pendingWall.release();
-		}
+		this.myParent.getRecord(workingPeer.getAddress()).signalConnected();
+		this.pendingWall.release();
 
-		//TODO should this have a thread pool/executor?
+		// TODO should this have a thread pool/executor?
 		workingPeer.addConnectionEventListener(new DeadPeerListener(this.myParent));
-		/*
-		 * Log
-		 */
-		this.myParent.logEvent("worked " + workingPeer.getAddress().toString());
+
+		this.myParent.logEvent("worked " + workingPeer.getAddress().toString());		
 	}
 }
