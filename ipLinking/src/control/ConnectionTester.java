@@ -49,12 +49,8 @@ public class ConnectionTester implements Runnable {
 		this.pendingWall = new Semaphore(ConnectionTester.MAX_PEERS_TO_TEST);
 		this.step = 0;
 
-		/*
-		 * We need very few threads as the action of recording success/failure
-		 * blocks REALLY heavily and is basically single threaded (but super
-		 * cheap), therefore don't muddy the waters with a ton of threads
-		 */
-		this.connTestPool = new ThreadPoolExecutor(1, 2, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
+		//TODO numbers?
+		this.connTestPool = new ThreadPoolExecutor(2, 4, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
 	}
 
 	public void giveNewNode(PeerAddress addr, long ts, boolean unsolicited) {
@@ -95,6 +91,11 @@ public class ConnectionTester implements Runnable {
 						testPull = this.harvestedPeers.take();
 					}
 
+					/*
+					 * Get the record object and attempt to spin up a test,
+					 * prevents us from spinning up two tests at the same time
+					 * (attemptConnectionStart returns false)
+					 */
 					PeerRecord tRecord = this.myParent.getRecord(testPull.getAddress());
 					if (tRecord.attemptConnectionStart()) {
 						toTest = tRecord.getMyAddr();
@@ -105,6 +106,7 @@ public class ConnectionTester implements Runnable {
 				 * Actually spin the test up
 				 */
 				Peer peerObj = new Peer(this.myParent.getParams(), this.version, toTest, null, false);
+				peerObj.registerAddressConsumer(this.myParent);
 				ConnTestSlave testSlave = new ConnTestSlave(peerObj, this);
 				ListenableFuture<SocketAddress> connFuture = this.myParent.getNIOClient()
 						.openConnection(toTest.getSocketAddress(), peerObj);
@@ -139,7 +141,9 @@ public class ConnectionTester implements Runnable {
 
 		// TODO should this have a thread pool/executor?
 		workingPeer.addConnectionEventListener(new DeadPeerListener(this.myParent));
+		
+		this.myParent.resolvedStartedPeer(workingPeer);
 
-		this.myParent.logEvent("worked " + workingPeer.getAddress().toString());		
+		this.myParent.logEvent("worked " + workingPeer.getAddress().toString());
 	}
 }

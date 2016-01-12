@@ -30,6 +30,7 @@ public class AddressHarvest implements Runnable {
 		long ts = System.currentTimeMillis();
 		if(jitter){
 			ts += this.rng.nextDouble() * AddressHarvest.MIN_HARVEST_INTERVAL_SEC * 1000;
+			this.myParent.logEvent("New harvest target " + newPeer.getAddress());
 		}
 		PeerTimePair tmpPair = new PeerTimePair(newPeer, ts);
 		this.toTestQueue.put(tmpPair);
@@ -74,6 +75,7 @@ public class AddressHarvest implements Runnable {
 				 * Actually request addrs, SUPER IMPORTANT TO NOTE THIS WILL
 				 * ALWAYS RETURN NULL
 				 */
+				this.myParent.logEvent("Addr harvest request for " + tmpPair.getPeer().getAddress());
 				tmpPair.getPeer().getAddr();
 			} catch (InterruptedException e) {
 				this.myParent.logException(e.getLocalizedMessage());

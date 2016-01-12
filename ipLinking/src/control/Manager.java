@@ -4,10 +4,13 @@ import java.net.InetSocketAddress;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.io.IOException;
 
+import org.bitcoinj.core.AddressMessage;
+import org.bitcoinj.core.AddressUser;
 import org.bitcoinj.core.Context;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Peer;
@@ -20,22 +23,22 @@ import org.bitcoinj.params.MainNetParams;
 import data.PeerRecord;
 import logging.ThreadedWriter;
 
-public class Manager implements Runnable {
+public class Manager implements Runnable, AddressUser {
 
 	private NetworkParameters params;
 	private Context bcjContext;
 	private NioClientManager nioClient;
 
 	private ConcurrentHashMap<PeerAddress, PeerRecord> records;
-	private ConcurrentHashMap<PeerAddress, Peer> nodeObjects;
 
 	private ConnectionTester connTester;
+	private AddressHarvest addrHarvester;
 
 	private ThreadedWriter runLog;
 	private ThreadedWriter exceptionLog;
 
 	private static final DateFormat LONG_DF = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-	private static final long STATUSREPORT_INTERVAL_SEC = 120;
+	private static final long STATUSREPORT_INTERVAL_SEC = 20;
 
 	public Manager() throws IOException {
 		/*
@@ -50,7 +53,6 @@ public class Manager implements Runnable {
 		 * Internal data structures
 		 */
 		this.records = new ConcurrentHashMap<PeerAddress, PeerRecord>();
-		this.nodeObjects = new ConcurrentHashMap<PeerAddress, Peer>();
 
 		/*
 		 * Logging
@@ -77,7 +79,16 @@ public class Manager implements Runnable {
 		this.logEvent("NIO start done");
 
 		/*
-		 * Start ze connection tester
+		 * Start ze address harvester
+		 */
+		this.addrHarvester = new AddressHarvest(this);
+		Thread harvestThread = new Thread(this.addrHarvester);
+		harvestThread.setDaemon(true);
+		harvestThread.start();
+
+		/*
+		 * Start ze connection tester, WE MUST BE 100% READY FOR LIVE NODES AT
+		 * THIS POINT
 		 */
 		this.connTester = new ConnectionTester(this);
 		Thread connTestThread = new Thread(this.connTester);
@@ -94,7 +105,7 @@ public class Manager implements Runnable {
 			throw new RuntimeException("Failure during DNS peer fetch.");
 		}
 		for (PeerAddress tPeer : dnsPeers) {
-			this.possiblyLearnPeer(tPeer, null, true, System.currentTimeMillis());
+			this.possiblyLearnPeer(tPeer, null, false, 0);
 		}
 	}
 
@@ -145,6 +156,44 @@ public class Manager implements Runnable {
 			this.records.get(learnedPeer).addNodeWhoKnowsMe(learnedFrom);
 		}
 	}
+	
+	public void resolvedStartedPeer(Peer thePeer){
+		this.addrHarvester.giveNewHarvestTarget(thePeer, true);
+	}
+
+	public void cleanupDeadPeer(Peer thePeer) {
+		this.addrHarvester.poisonPeer(thePeer.getAddress());
+	}
+
+	@Override
+	public void getSolicitedAddresses(AddressMessage arg0, Peer arg1) {
+		this.logEvent("Solicted push of " + arg0.getAddresses().size() + " from " + arg1.getAddress());
+		
+		List<PeerAddress> harvestedAddrs = arg0.getAddresses();
+		long theirNow = System.currentTimeMillis() / 1000 - arg1.getClockSkewGuess();
+		for(PeerAddress tAddr: harvestedAddrs){
+			if(!this.records.containsKey(tAddr)){
+				this.possiblyLearnPeer(tAddr, arg1.getAddress(), false, theirNow - tAddr.getTime());
+			}else{
+				this.records.get(tAddr).addNodeWhoKnowsMe(arg1.getAddress());
+			}
+		}
+	}
+
+	@Override
+	//TODO this is literaly the same code as above save one bool, merge and clean interface?
+	public void getUnsolicitedAddresses(AddressMessage arg0, Peer arg1) {
+		this.logEvent("Unsolicted  push of " + arg0.getAddresses().size() + " from " + arg1.getAddress());
+		List<PeerAddress> harvestedAddrs = arg0.getAddresses();
+		long theirNow = System.currentTimeMillis() / 1000 - arg1.getClockSkewGuess();
+		for(PeerAddress tAddr: harvestedAddrs){
+			if(!this.records.containsKey(tAddr)){
+				this.possiblyLearnPeer(tAddr, arg1.getAddress(), true, theirNow - tAddr.getTime());
+			}else{
+				this.records.get(tAddr).addNodeWhoKnowsMe(arg1.getAddress());
+			}
+		}
+	}
 
 	public PeerRecord getRecord(PeerAddress addr) {
 		return this.records.get(addr);
@@ -161,10 +210,6 @@ public class Manager implements Runnable {
 	@Override
 	public void run() {
 
-		AddressHarvest addrHarvest = new AddressHarvest(this);
-		Thread harvestThread = new Thread(addrHarvest);
-		harvestThread.start();
-
 		while (true) {
 			try {
 				Thread.sleep(Manager.STATUSREPORT_INTERVAL_SEC * 1000);
@@ -174,7 +219,7 @@ public class Manager implements Runnable {
 
 			this.logEvent("total known nodes " + this.records.size());
 			this.logEvent(
-					"active connections " + this.nioClient.getConnectedClientCount() + "/" + this.nodeObjects.size());
+					"active connections " + this.nioClient.getConnectedClientCount());
 		}
 
 	}
