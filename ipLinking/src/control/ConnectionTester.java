@@ -35,7 +35,7 @@ public class ConnectionTester implements Runnable {
 	private PriorityBlockingQueue<PeerAddressTimePair> unsolicitedPeers;
 	private PriorityBlockingQueue<PeerAddressTimePair> disconnectedPeers;
 
-	private static final int MAX_PEERS_TO_TEST = 2000;
+	private static final int MAX_PEERS_TO_TEST = 5000;
 	private static final long TOO_SOON_SEC = 1800;
 
 	public ConnectionTester(Manager parent) {
@@ -57,16 +57,10 @@ public class ConnectionTester implements Runnable {
 		/*
 		 * TODO check that these queues remain "sane" in size
 		 */
-		PeerAddressTimePair tmpPair = null;
+		PeerAddressTimePair tmpPair = new PeerAddressTimePair(addr, ts);
 		if (unsolicited) {
-			/*
-			 * We prioritize the most recently learned unsolicted addrs, so
-			 * invert the TS
-			 */
-			tmpPair = new PeerAddressTimePair(addr, ts * -1);
 			this.unsolicitedPeers.offer(tmpPair);
 		} else {
-			tmpPair = new PeerAddressTimePair(addr, ts);
 			this.harvestedPeers.offer(tmpPair);
 		}
 	}
@@ -112,7 +106,7 @@ public class ConnectionTester implements Runnable {
 						.openConnection(toTest.getSocketAddress(), peerObj);
 				Futures.addCallback(connFuture, testSlave, this.connTestPool);
 
-			} catch (InterruptedException e) {
+			} catch (Exception e) {
 				this.myParent.logException(e.getLocalizedMessage());
 			}
 		}

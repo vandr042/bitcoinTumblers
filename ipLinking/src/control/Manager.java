@@ -4,9 +4,13 @@ import java.net.InetSocketAddress;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.io.IOException;
 
 import org.bitcoinj.core.AddressMessage;
@@ -153,11 +157,11 @@ public class Manager implements Runnable, AddressUser {
 			}
 		}
 		if (learnedFrom != null) {
-			this.records.get(learnedPeer).addNodeWhoKnowsMe(learnedFrom);
+			this.records.get(learnedPeer).addNodeWhoKnowsMe(learnedFrom, ts);
 		}
 	}
-	
-	public void resolvedStartedPeer(Peer thePeer){
+
+	public void resolvedStartedPeer(Peer thePeer) {
 		this.addrHarvester.giveNewHarvestTarget(thePeer, true);
 	}
 
@@ -168,29 +172,36 @@ public class Manager implements Runnable, AddressUser {
 	@Override
 	public void getSolicitedAddresses(AddressMessage arg0, Peer arg1) {
 		this.logEvent("Solicted push of " + arg0.getAddresses().size() + " from " + arg1.getAddress());
-		
+
 		List<PeerAddress> harvestedAddrs = arg0.getAddresses();
 		long theirNow = System.currentTimeMillis() / 1000 - arg1.getClockSkewGuess();
-		for(PeerAddress tAddr: harvestedAddrs){
-			if(!this.records.containsKey(tAddr)){
-				this.possiblyLearnPeer(tAddr, arg1.getAddress(), false, theirNow - tAddr.getTime());
-			}else{
-				this.records.get(tAddr).addNodeWhoKnowsMe(arg1.getAddress());
+		for (PeerAddress tAddr : harvestedAddrs) {
+			long logonGuess = theirNow - tAddr.getTime();
+			if (!this.records.containsKey(tAddr)) {
+				this.possiblyLearnPeer(tAddr, arg1.getAddress(), false, logonGuess);
+			} else {
+				this.records.get(tAddr).addNodeWhoKnowsMe(arg1.getAddress(), logonGuess);
 			}
 		}
 	}
 
 	@Override
-	//TODO this is literaly the same code as above save one bool, merge and clean interface?
+	// TODO this is literaly the same code as above save one bool, merge and
+	// clean interface?
 	public void getUnsolicitedAddresses(AddressMessage arg0, Peer arg1) {
 		this.logEvent("Unsolicted  push of " + arg0.getAddresses().size() + " from " + arg1.getAddress());
 		List<PeerAddress> harvestedAddrs = arg0.getAddresses();
+		/*
+		 * This math should be correct, clockSkew is myNow - theirNow (i.e. the
+		 * number of seconds ahead I am)
+		 */
 		long theirNow = System.currentTimeMillis() / 1000 - arg1.getClockSkewGuess();
-		for(PeerAddress tAddr: harvestedAddrs){
-			if(!this.records.containsKey(tAddr)){
-				this.possiblyLearnPeer(tAddr, arg1.getAddress(), true, theirNow - tAddr.getTime());
-			}else{
-				this.records.get(tAddr).addNodeWhoKnowsMe(arg1.getAddress());
+		for (PeerAddress tAddr : harvestedAddrs) {
+			long logonGuess = theirNow - tAddr.getTime();
+			if (!this.records.containsKey(tAddr)) {
+				this.possiblyLearnPeer(tAddr, arg1.getAddress(), true, logonGuess);
+			} else {
+				this.records.get(tAddr).addNodeWhoKnowsMe(arg1.getAddress(), logonGuess);
 			}
 		}
 	}
@@ -207,6 +218,38 @@ public class Manager implements Runnable, AddressUser {
 		return this.params;
 	}
 
+	public void dumpRespondingNodes(String file) {
+		try {
+			BufferedWriter outBuffer = new BufferedWriter(new FileWriter(file));
+			for (PeerRecord tRecord : this.records.values()) {
+				long tempUp = tRecord.getLastUptime();
+				if (tempUp != 0) {
+					outBuffer.write(tRecord.getMyAddr().toString() + "," + tempUp + ","
+							+ Boolean.toString(tRecord.getTimeConnected() != -1) + "\n");
+				}
+			}
+			outBuffer.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public void dumpKnowledge(String file) {
+		try {
+			BufferedWriter outBuffer = new BufferedWriter(new FileWriter(file));
+			for (PeerRecord tRecord : this.records.values()) {
+				HashMap<PeerAddress, Long> freshMap = tRecord.getCopyOfNodesWhoKnow();
+				outBuffer.write("***," + tRecord.getMyAddr().toString() + "\n");
+				for (PeerAddress tKnowingPeer : freshMap.keySet()) {
+					outBuffer.write(tKnowingPeer.toString() + "," + freshMap.get(tKnowingPeer) + "\n");
+				}
+			}
+			outBuffer.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
 	@Override
 	public void run() {
 
@@ -218,8 +261,11 @@ public class Manager implements Runnable, AddressUser {
 			}
 
 			this.logEvent("total known nodes " + this.records.size());
-			this.logEvent(
-					"active connections " + this.nioClient.getConnectedClientCount());
+			this.logEvent("active connections " + this.nioClient.getConnectedClientCount());
+			/*
+			 * Force the cleaning up of useless arrays every little bit
+			 */
+			System.gc();
 		}
 
 	}
@@ -234,7 +280,25 @@ public class Manager implements Runnable, AddressUser {
 		Thread selfThread = new Thread(self);
 		selfThread.start();
 
-		// TODO simple UI to query Manager
+		// TODO set *this (main)* thread to daemon
+		Scanner inScanner = new Scanner(System.in);
+		while (true) {
+			String cmd = inScanner.next();
+
+			if (cmd.equalsIgnoreCase("knowledge")) {
+				System.out.println("Enter file name");
+				String fileName = inScanner.next();
+				self.dumpKnowledge(fileName);
+			} else if (cmd.equalsIgnoreCase("sucesses")) {
+				System.out.println("Enter file name");
+				String fileName = inScanner.next();
+				self.dumpRespondingNodes(fileName);
+			} else if (cmd.equalsIgnoreCase("exit")) {
+				// TODO make this actually kill the program?
+				break;
+			}
+		}
+		inScanner.close();
 	}
 
 }

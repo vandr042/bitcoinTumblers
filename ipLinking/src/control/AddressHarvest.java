@@ -16,7 +16,7 @@ public class AddressHarvest implements Runnable {
 	private PriorityBlockingQueue<PeerTimePair> toTestQueue;
 	private Set<PeerAddress> blackListSet;
 
-	private static final long MIN_HARVEST_INTERVAL_SEC = 30;
+	private static final long MIN_HARVEST_INTERVAL_SEC = 15;
 
 	public AddressHarvest(Manager parent) {
 		this.myParent = parent;
@@ -77,7 +77,7 @@ public class AddressHarvest implements Runnable {
 				 */
 				this.myParent.logEvent("Addr harvest request for " + tmpPair.getPeer().getAddress());
 				tmpPair.getPeer().getAddr();
-			} catch (InterruptedException e) {
+			} catch (Exception e) {
 				this.myParent.logException(e.getLocalizedMessage());
 			}
 		}
