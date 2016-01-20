@@ -4,6 +4,8 @@ import java.util.HashMap;
 
 import org.bitcoinj.core.PeerAddress;
 
+import control.Manager;
+
 public class PeerRecord {
 
 	private PeerAddress myAddr;
@@ -13,13 +15,16 @@ public class PeerRecord {
 	private long lastUptime;
 	private HashMap<PeerAddress, Long> peersWhoKnowMe;
 
-	public PeerRecord(PeerAddress addr) {
+	private Manager myParent;
+
+	public PeerRecord(PeerAddress addr, Manager parent) {
 		this.myAddr = addr;
 		this.timeConnected = -1;
 		this.timeDisconnected = -1;
 		this.timeConnFailed = -1;
 		this.lastUptime = 0;
 		this.peersWhoKnowMe = new HashMap<PeerAddress, Long>();
+		this.myParent = parent;
 	}
 
 	public boolean equals(Object rhs) {
@@ -84,6 +89,8 @@ public class PeerRecord {
 		boolean retFlag = false;
 		synchronized (this.peersWhoKnowMe) {
 			retFlag = this.peersWhoKnowMe.containsKey(nodeWhoKnows);
+			this.myParent.logEvent("TS update for " + this.myAddr.toString() + " from " + nodeWhoKnows.toString() + "("
+					+ this.peersWhoKnowMe.get(nodeWhoKnows) + "," + ts + ")");
 			this.peersWhoKnowMe.put(nodeWhoKnows, ts);
 		}
 		return retFlag;

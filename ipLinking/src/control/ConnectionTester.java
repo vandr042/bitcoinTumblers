@@ -210,7 +210,7 @@ public class ConnectionTester implements Runnable {
 			Peer peerObj = new Peer(this.myParent.getParams(), this.version, toTest, null, false);
 			peerObj.registerAddressConsumer(this.myParent);
 			ConnTestSlave testSlave = new ConnTestSlave(peerObj, this);
-			ListenableFuture<SocketAddress> connFuture = this.myParent.getNIOClient()
+			ListenableFuture<SocketAddress> connFuture = this.myParent.getRandomNIOClient()
 					.openConnection(toTest.getSocketAddress(), peerObj);
 			Futures.addCallback(connFuture, testSlave, this.connTestPool);
 			return true;

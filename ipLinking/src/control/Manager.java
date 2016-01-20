@@ -6,6 +6,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Random;
 import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -31,7 +32,8 @@ public class Manager implements Runnable, AddressUser {
 
 	private NetworkParameters params;
 	private Context bcjContext;
-	private NioClientManager nioClient;
+	private NioClientManager firstNIO;
+	private NioClientManager secondNIO;
 
 	private ConcurrentHashMap<PeerAddress, PeerRecord> records;
 
@@ -41,6 +43,8 @@ public class Manager implements Runnable, AddressUser {
 	private ThreadedWriter runLog;
 	private ThreadedWriter exceptionLog;
 
+	public static Random insecureRandom = new Random();
+	
 	private static final DateFormat LONG_DF = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 	private static final long STATUSREPORT_INTERVAL_SEC = 120;
 
@@ -77,9 +81,12 @@ public class Manager implements Runnable, AddressUser {
 		 * Spin up NIO client
 		 */
 		this.logEvent("NIO start");
-		this.nioClient = new NioClientManager();
-		this.nioClient.startAsync();
-		this.nioClient.awaitRunning();
+		this.firstNIO = new NioClientManager();
+		this.secondNIO = new NioClientManager();
+		this.firstNIO.startAsync();
+		this.secondNIO.startAsync();
+		this.firstNIO.awaitRunning();
+		this.secondNIO.awaitRunning();
 		this.logEvent("NIO start done");
 
 		/*
@@ -154,7 +161,7 @@ public class Manager implements Runnable, AddressUser {
 		 */
 		synchronized (this.records) {
 			if (!this.records.containsKey(learnedPeer)) {
-				PeerRecord newRecord = new PeerRecord(learnedPeer);
+				PeerRecord newRecord = new PeerRecord(learnedPeer, this);
 				this.records.put(learnedPeer, newRecord);
 				returnFlag = true;
 			}
@@ -215,10 +222,24 @@ public class Manager implements Runnable, AddressUser {
 	public PeerRecord getRecord(PeerAddress addr) {
 		return this.records.get(addr);
 	}
-
-	public NioClientManager getNIOClient() {
-		return this.nioClient;
+	
+	public NioClientManager getRandomNIOClient(){
+		if(this.firstNIO.getConnectedClientCount() - this.secondNIO.getConnectedClientCount() > 300){
+			return this.secondNIO;
+		}else if(this.secondNIO.getConnectedClientCount() - this.firstNIO.getConnectedClientCount() > 300){
+			return this.firstNIO;
+		}
+		
+		if(Manager.insecureRandom.nextBoolean()){
+			return this.firstNIO;
+		}else{
+			return this.secondNIO;
+		}
 	}
+
+/*	public NioClientManager getNIOClient() {
+		return this.firstNIO;
+	}*/
 
 	public NetworkParameters getParams() {
 		return this.params;
@@ -266,8 +287,10 @@ public class Manager implements Runnable, AddressUser {
 				e.printStackTrace();
 			}
 
+			int firstCount = this.firstNIO.getConnectedClientCount();
+			int secondCount = this.secondNIO.getConnectedClientCount();
 			this.logEvent("total known nodes " + this.records.size());
-			this.logEvent("active connections " + this.nioClient.getConnectedClientCount());
+			this.logEvent("active connections " + (firstCount + secondCount)+ "(" + firstCount + "/" + secondCount + ")");
 			/*
 			 * Force the cleaning up of useless arrays every little bit
 			 */
