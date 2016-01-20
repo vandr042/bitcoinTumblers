@@ -1609,13 +1609,13 @@ public class Peer extends PeerSocketHandler {
 		synchronized (this.solicitFlag) {
 			this.solicitFlag = true;
 		}
-		if(Peer.LOBOTOMIZE){
-			return null;
-		}
-		
-		SettableFuture<AddressMessage> future = SettableFuture.create();
-		synchronized (getAddrFutures) {
-			getAddrFutures.add(future);
+
+		SettableFuture<AddressMessage> future = null;
+		if (!Peer.LOBOTOMIZE) {
+			future = SettableFuture.create();
+			synchronized (getAddrFutures) {
+				getAddrFutures.add(future);
+			}
 		}
 		sendMessage(new GetAddrMessage(params));
 		return future;
@@ -2214,5 +2214,13 @@ public class Peer extends PeerSocketHandler {
 
 	public long getClockSkewGuess() {
 		return this.clockSkewGuess;
+	}
+	
+	public long convertLocalTimeToThiers(long ts){
+		return ts - this.clockSkewGuess;
+	}
+	
+	public long convertTheirTimeToLocal(long ts){
+		return ts + this.clockSkewGuess;
 	}
 }
