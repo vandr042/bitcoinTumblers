@@ -80,10 +80,13 @@ public class PeerRecord {
 		return retFlag;
 	}
 
-	public void addNodeWhoKnowsMe(PeerAddress nodeWhoKnows, Long ts) {
+	public boolean addNodeWhoKnowsMe(PeerAddress nodeWhoKnows, Long ts) {
+		boolean retFlag = false;
 		synchronized (this.peersWhoKnowMe) {
+			retFlag = this.peersWhoKnowMe.containsKey(nodeWhoKnows);
 			this.peersWhoKnowMe.put(nodeWhoKnows, ts);
 		}
+		return retFlag;
 	}
 
 	public PeerAddress getMyAddr() {

@@ -42,7 +42,7 @@ public class Manager implements Runnable, AddressUser {
 	private ThreadedWriter exceptionLog;
 
 	private static final DateFormat LONG_DF = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-	private static final long STATUSREPORT_INTERVAL_SEC = 20;
+	private static final long STATUSREPORT_INTERVAL_SEC = 120;
 
 	public Manager() throws IOException {
 		/*
@@ -110,6 +110,7 @@ public class Manager implements Runnable, AddressUser {
 		}
 		for (PeerAddress tPeer : dnsPeers) {
 			this.possiblyLearnPeer(tPeer, null, false, 0);
+			this.connTester.giveNewNode(tPeer, 0, false);
 		}
 	}
 
@@ -143,7 +144,9 @@ public class Manager implements Runnable, AddressUser {
 		this.exceptionLog.writeOrDie(Manager.getTimestamp() + "," + errMsg + "\n");
 	}
 
-	public void possiblyLearnPeer(PeerAddress learnedPeer, PeerAddress learnedFrom, boolean unsolicitied, long ts) {
+	public boolean possiblyLearnPeer(PeerAddress learnedPeer, PeerAddress learnedFrom, boolean unsolicitied, long ts) {
+		boolean returnFlag = false;
+		
 		/*
 		 * XXX super tiny race condition could cause node to not get credited
 		 * with going into unsolicitied queue, but still ends up in harvested to
@@ -153,12 +156,14 @@ public class Manager implements Runnable, AddressUser {
 			if (!this.records.containsKey(learnedPeer)) {
 				PeerRecord newRecord = new PeerRecord(learnedPeer);
 				this.records.put(learnedPeer, newRecord);
-				this.connTester.giveNewNode(learnedPeer, ts, unsolicitied);
+				returnFlag = true;
 			}
 		}
 		if (learnedFrom != null) {
 			this.records.get(learnedPeer).addNodeWhoKnowsMe(learnedFrom, ts);
 		}
+		
+		return returnFlag;
 	}
 
 	public void resolvedStartedPeer(Peer thePeer) {
@@ -167,6 +172,8 @@ public class Manager implements Runnable, AddressUser {
 
 	public void cleanupDeadPeer(Peer thePeer) {
 		this.addrHarvester.poisonPeer(thePeer.getAddress());
+		//TODO ensure this gets called once per peer
+		//TODO give the PeerAddress back tot he conn tester for work 
 	}
 
 	@Override
@@ -174,11 +181,12 @@ public class Manager implements Runnable, AddressUser {
 		this.logEvent("Solicted push of " + arg0.getAddresses().size() + " from " + arg1.getAddress());
 
 		List<PeerAddress> harvestedAddrs = arg0.getAddresses();
-		long theirNow = System.currentTimeMillis() / 1000 - arg1.getClockSkewGuess();
 		for (PeerAddress tAddr : harvestedAddrs) {
-			long logonGuess = theirNow - tAddr.getTime();
+			long logonGuess = arg1.convertTheirTimeToLocal(tAddr.getTime());
 			if (!this.records.containsKey(tAddr)) {
-				this.possiblyLearnPeer(tAddr, arg1.getAddress(), false, logonGuess);
+				if(this.possiblyLearnPeer(tAddr, arg1.getAddress(), false, logonGuess)){
+					this.connTester.giveNewNode(tAddr, -1 * logonGuess, false);
+				}
 			} else {
 				this.records.get(tAddr).addNodeWhoKnowsMe(arg1.getAddress(), logonGuess);
 			}
@@ -186,8 +194,6 @@ public class Manager implements Runnable, AddressUser {
 	}
 
 	@Override
-	// TODO this is literaly the same code as above save one bool, merge and
-	// clean interface?
 	public void getUnsolicitedAddresses(AddressMessage arg0, Peer arg1) {
 		this.logEvent("Unsolicted  push of " + arg0.getAddresses().size() + " from " + arg1.getAddress());
 		List<PeerAddress> harvestedAddrs = arg0.getAddresses();
@@ -195,14 +201,14 @@ public class Manager implements Runnable, AddressUser {
 		 * This math should be correct, clockSkew is myNow - theirNow (i.e. the
 		 * number of seconds ahead I am)
 		 */
-		long theirNow = System.currentTimeMillis() / 1000 - arg1.getClockSkewGuess();
 		for (PeerAddress tAddr : harvestedAddrs) {
-			long logonGuess = theirNow - tAddr.getTime();
+			long logonGuess = arg1.convertTheirTimeToLocal(tAddr.getTime());
 			if (!this.records.containsKey(tAddr)) {
 				this.possiblyLearnPeer(tAddr, arg1.getAddress(), true, logonGuess);
 			} else {
 				this.records.get(tAddr).addNodeWhoKnowsMe(arg1.getAddress(), logonGuess);
 			}
+			this.connTester.giveNewNode(tAddr, -1 * logonGuess, true);
 		}
 	}
 
@@ -296,7 +302,10 @@ public class Manager implements Runnable, AddressUser {
 			} else if (cmd.equalsIgnoreCase("exit")) {
 				// TODO make this actually kill the program?
 				break;
+			}else{
+				System.out.println("Bad command.");
 			}
+			//TODO report when dump done
 		}
 		inScanner.close();
 	}
