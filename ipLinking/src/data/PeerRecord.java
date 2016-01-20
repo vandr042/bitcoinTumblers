@@ -89,8 +89,10 @@ public class PeerRecord {
 		boolean retFlag = false;
 		synchronized (this.peersWhoKnowMe) {
 			retFlag = this.peersWhoKnowMe.containsKey(nodeWhoKnows);
-			this.myParent.logEvent("TS update for " + this.myAddr.toString() + " from " + nodeWhoKnows.toString() + "("
-					+ this.peersWhoKnowMe.get(nodeWhoKnows) + "," + ts + ")");
+			if (retFlag) {
+				this.myParent.logEvent("TS update for " + this.myAddr.toString() + " from " + nodeWhoKnows.toString()
+						+ "(" + this.peersWhoKnowMe.get(nodeWhoKnows) + "," + ts + ")");
+			}
 			this.peersWhoKnowMe.put(nodeWhoKnows, ts);
 		}
 		return retFlag;
