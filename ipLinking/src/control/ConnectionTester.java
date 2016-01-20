@@ -25,7 +25,6 @@ import listeners.DeadPeerListener;
 public class ConnectionTester implements Runnable {
 
 	private Manager myParent;
-	private VersionMessage version;
 	private Executor connTestPool;
 
 	private BlockingQueue<ConnectionEvent> eventQueue;
@@ -49,7 +48,6 @@ public class ConnectionTester implements Runnable {
 
 	public ConnectionTester(Manager parent) {
 		this.myParent = parent;
-		this.version = new VersionMessage(this.myParent.getParams(), 0);
 
 		this.eventQueue = new LinkedBlockingQueue<ConnectionEvent>();
 
@@ -207,7 +205,8 @@ public class ConnectionTester implements Runnable {
 			/*
 			 * Actually spin the test up
 			 */
-			Peer peerObj = new Peer(this.myParent.getParams(), this.version, toTest, null, false);
+			Peer peerObj = new Peer(this.myParent.getParams(), new VersionMessage(this.myParent.getParams(), 0), toTest,
+					null, false);
 			peerObj.registerAddressConsumer(this.myParent);
 			ConnTestSlave testSlave = new ConnTestSlave(peerObj, this);
 			ListenableFuture<SocketAddress> connFuture = this.myParent.getRandomNIOClient()
@@ -236,9 +235,10 @@ public class ConnectionTester implements Runnable {
 		this.retryPeers.add(new PeerAddressTimePair(failedPeer.getAddress(),
 				System.currentTimeMillis() + ConnectionTester.RETEST_TRY_SEC * 1000));
 		this.myParent.logEvent("failed " + failedPeer.getAddress().toString() + " - " + reason);
-		
+
 		/*
-		 * We have a new retest option AND an open test slot, pair of events gogo
+		 * We have a new retest option AND an open test slot, pair of events
+		 * gogo
 		 */
 		this.eventQueue.add(ConnectionEvent.AVAILOLD);
 		this.eventQueue.add(ConnectionEvent.AVAILTEST);
