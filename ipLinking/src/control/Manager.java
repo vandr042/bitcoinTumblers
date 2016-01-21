@@ -37,6 +37,7 @@ public class Manager implements Runnable, AddressUser {
 	private NioClientManager[] nioManagers;
 
 	private ConcurrentHashMap<PeerAddress, PeerRecord> records;
+	private ConcurrentHashMap<PeerAddress, Peer> peerObjs;
 
 	private ConnectionTester connTester;
 	private AddressHarvest addrHarvester;
@@ -64,6 +65,7 @@ public class Manager implements Runnable, AddressUser {
 		 * Internal data structures
 		 */
 		this.records = new ConcurrentHashMap<PeerAddress, PeerRecord>();
+		this.peerObjs = new ConcurrentHashMap<PeerAddress, Peer>();
 
 		/*
 		 * Logging
@@ -182,10 +184,12 @@ public class Manager implements Runnable, AddressUser {
 
 	public void resolvedStartedPeer(Peer thePeer) {
 		this.addrHarvester.giveNewHarvestTarget(thePeer, true);
+		this.peerObjs.put(thePeer.getAddress(), thePeer);
 	}
 
 	public void cleanupDeadPeer(Peer thePeer) {
 		this.addrHarvester.poisonPeer(thePeer.getAddress());
+		this.peerObjs.remove(thePeer.getAddress());
 		// TODO ensure this gets called once per peer
 		// TODO give the PeerAddress back tot he conn tester for work
 	}
@@ -234,8 +238,8 @@ public class Manager implements Runnable, AddressUser {
 		int slot = Manager.insecureRandom.nextInt(Manager.NIO_CLIENT_MGER_COUNT);
 		return this.nioManagers[slot];
 	}
-	
-	private int[] getConnectionCoutns(){
+
+	private int[] getConnectionCoutns() {
 		int[] counts = new int[this.nioManagers.length];
 		for (int counter = 0; counter < this.nioManagers.length; counter++) {
 			counts[counter] = this.nioManagers[counter].getConnectedClientCount();
@@ -283,6 +287,21 @@ public class Manager implements Runnable, AddressUser {
 		}
 	}
 
+	public void dumpTimeSkew(String file) {
+		try {
+			BufferedWriter outBuffer = new BufferedWriter(new FileWriter(file));
+			for (PeerAddress tAddr : this.peerObjs.keySet()) {
+				Peer tPeer = this.peerObjs.get(tAddr);
+				if (tPeer != null) {
+					outBuffer.write(tPeer.getAddress().toString() + "," + tPeer.getClockSkewGuess() + "\n");
+				}
+			}
+			outBuffer.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
 	@Override
 	public void run() {
 
@@ -294,7 +313,7 @@ public class Manager implements Runnable, AddressUser {
 			}
 			int[] counts = this.getConnectionCoutns();
 			int sum = 0;
-			for(int tCount: counts){
+			for (int tCount : counts) {
 				sum += tCount;
 			}
 
@@ -331,6 +350,10 @@ public class Manager implements Runnable, AddressUser {
 				System.out.println("Enter file name");
 				String fileName = inScanner.next();
 				self.dumpRespondingNodes(fileName);
+			} else if (cmd.equalsIgnoreCase("clock")) {
+				System.out.println("Enter file name");
+				String fileName = inScanner.next();
+				self.dumpTimeSkew(fileName);
 			} else if (cmd.equalsIgnoreCase("exit")) {
 				// TODO make this actually kill the program?
 				break;
