@@ -3,6 +3,7 @@ package control;
 import java.net.InetSocketAddress;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -32,8 +33,8 @@ public class Manager implements Runnable, AddressUser {
 
 	private NetworkParameters params;
 	private Context bcjContext;
-	private NioClientManager firstNIO;
-	private NioClientManager secondNIO;
+
+	private NioClientManager[] nioManagers;
 
 	private ConcurrentHashMap<PeerAddress, PeerRecord> records;
 
@@ -44,9 +45,11 @@ public class Manager implements Runnable, AddressUser {
 	private ThreadedWriter exceptionLog;
 
 	public static Random insecureRandom = new Random();
-	
+
 	private static final DateFormat LONG_DF = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 	private static final long STATUSREPORT_INTERVAL_SEC = 120;
+
+	private static final int NIO_CLIENT_MGER_COUNT = 4;
 
 	public Manager() throws IOException {
 		/*
@@ -81,12 +84,16 @@ public class Manager implements Runnable, AddressUser {
 		 * Spin up NIO client
 		 */
 		this.logEvent("NIO start");
-		this.firstNIO = new NioClientManager();
-		this.secondNIO = new NioClientManager();
-		this.firstNIO.startAsync();
-		this.secondNIO.startAsync();
-		this.firstNIO.awaitRunning();
-		this.secondNIO.awaitRunning();
+		this.nioManagers = new NioClientManager[Manager.NIO_CLIENT_MGER_COUNT];
+		for (int counter = 0; counter < this.nioManagers.length; counter++) {
+			this.nioManagers[counter] = new NioClientManager(Thread.NORM_PRIORITY);
+		}
+		for (NioClientManager tManager : this.nioManagers) {
+			tManager.startAsync();
+		}
+		for (NioClientManager tManager : this.nioManagers) {
+			tManager.awaitRunning();
+		}
 		this.logEvent("NIO start done");
 
 		/*
@@ -153,7 +160,7 @@ public class Manager implements Runnable, AddressUser {
 
 	public boolean possiblyLearnPeer(PeerAddress learnedPeer, PeerAddress learnedFrom, boolean unsolicitied, long ts) {
 		boolean returnFlag = false;
-		
+
 		/*
 		 * XXX super tiny race condition could cause node to not get credited
 		 * with going into unsolicitied queue, but still ends up in harvested to
@@ -169,7 +176,7 @@ public class Manager implements Runnable, AddressUser {
 		if (learnedFrom != null) {
 			this.records.get(learnedPeer).addNodeWhoKnowsMe(learnedFrom, ts);
 		}
-		
+
 		return returnFlag;
 	}
 
@@ -179,8 +186,8 @@ public class Manager implements Runnable, AddressUser {
 
 	public void cleanupDeadPeer(Peer thePeer) {
 		this.addrHarvester.poisonPeer(thePeer.getAddress());
-		//TODO ensure this gets called once per peer
-		//TODO give the PeerAddress back tot he conn tester for work 
+		// TODO ensure this gets called once per peer
+		// TODO give the PeerAddress back tot he conn tester for work
 	}
 
 	@Override
@@ -191,7 +198,7 @@ public class Manager implements Runnable, AddressUser {
 		for (PeerAddress tAddr : harvestedAddrs) {
 			long logonGuess = arg1.convertTheirTimeToLocal(tAddr.getTime());
 			if (!this.records.containsKey(tAddr)) {
-				if(this.possiblyLearnPeer(tAddr, arg1.getAddress(), false, logonGuess)){
+				if (this.possiblyLearnPeer(tAddr, arg1.getAddress(), false, logonGuess)) {
 					this.connTester.giveNewNode(tAddr, -1 * logonGuess, false);
 				}
 			} else {
@@ -222,24 +229,23 @@ public class Manager implements Runnable, AddressUser {
 	public PeerRecord getRecord(PeerAddress addr) {
 		return this.records.get(addr);
 	}
+
+	public NioClientManager getRandomNIOClient() {
+		int slot = Manager.insecureRandom.nextInt(Manager.NIO_CLIENT_MGER_COUNT);
+		return this.nioManagers[slot];
+	}
 	
-	public NioClientManager getRandomNIOClient(){
-		if(this.firstNIO.getConnectedClientCount() - this.secondNIO.getConnectedClientCount() > 300){
-			return this.secondNIO;
-		}else if(this.secondNIO.getConnectedClientCount() - this.firstNIO.getConnectedClientCount() > 300){
-			return this.firstNIO;
+	private int[] getConnectionCoutns(){
+		int[] counts = new int[this.nioManagers.length];
+		for (int counter = 0; counter < this.nioManagers.length; counter++) {
+			counts[counter] = this.nioManagers[counter].getConnectedClientCount();
 		}
-		
-		if(Manager.insecureRandom.nextBoolean()){
-			return this.firstNIO;
-		}else{
-			return this.secondNIO;
-		}
+		return counts;
 	}
 
-/*	public NioClientManager getNIOClient() {
-		return this.firstNIO;
-	}*/
+	/*
+	 * public NioClientManager getNIOClient() { return this.firstNIO; }
+	 */
 
 	public NetworkParameters getParams() {
 		return this.params;
@@ -286,11 +292,14 @@ public class Manager implements Runnable, AddressUser {
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
+			int[] counts = this.getConnectionCoutns();
+			int sum = 0;
+			for(int tCount: counts){
+				sum += tCount;
+			}
 
-			int firstCount = this.firstNIO.getConnectedClientCount();
-			int secondCount = this.secondNIO.getConnectedClientCount();
 			this.logEvent("total known nodes " + this.records.size());
-			this.logEvent("active connections " + (firstCount + secondCount)+ "(" + firstCount + "/" + secondCount + ")");
+			this.logEvent("active connections " + sum + "(" + Arrays.toString(counts) + ")");
 			/*
 			 * Force the cleaning up of useless arrays every little bit
 			 */
@@ -325,10 +334,10 @@ public class Manager implements Runnable, AddressUser {
 			} else if (cmd.equalsIgnoreCase("exit")) {
 				// TODO make this actually kill the program?
 				break;
-			}else{
+			} else {
 				System.out.println("Bad command.");
 			}
-			//TODO report when dump done
+			// TODO report when dump done
 		}
 		inScanner.close();
 	}
