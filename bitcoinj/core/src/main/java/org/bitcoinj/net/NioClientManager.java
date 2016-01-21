@@ -50,6 +50,8 @@ public class NioClientManager extends AbstractExecutionThreadService implements 
 
     // Added to/removed from by the individual ConnectionHandler's, thus must by synchronized on its own.
     private final Set<ConnectionHandler> connectedHandlers = Collections.synchronizedSet(new HashSet<ConnectionHandler>());
+    
+    private int threadPriority = Thread.MIN_PRIORITY;
 
     // Handle a SelectionKey which was selected
     private void handleKey(SelectionKey key) throws IOException {
@@ -86,6 +88,11 @@ public class NioClientManager extends AbstractExecutionThreadService implements 
             ConnectionHandler.handleKey(key);
     }
 
+    public NioClientManager(int priority){
+    	this();
+    	this.threadPriority = priority;
+    }
+    
     /**
      * Creates a new client manager which uses Java NIO for socket management. Uses a single thread to handle all select
      * calls.
@@ -96,12 +103,13 @@ public class NioClientManager extends AbstractExecutionThreadService implements 
         } catch (IOException e) {
             throw new RuntimeException(e); // Shouldn't ever happen
         }
+        this.threadPriority = Thread.MIN_PRIORITY;
     }
 
     @Override
     public void run() {
         try {
-            Thread.currentThread().setPriority(Thread.MIN_PRIORITY);
+            Thread.currentThread().setPriority(this.threadPriority);
             while (isRunning()) {
                 PendingConnect conn;
                 while ((conn = newConnectionChannels.poll()) != null) {
