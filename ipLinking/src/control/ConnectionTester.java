@@ -6,6 +6,8 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -21,11 +23,14 @@ import data.PeerRecord;
 import data.PeerAddressTimePair;
 import listeners.ConnTestSlave;
 import listeners.DeadPeerListener;
+import listeners.VersionTestSlave;
 
 public class ConnectionTester implements Runnable {
 
 	private Manager myParent;
 	private Executor connTestPool;
+	private Executor versionTestPool;
+	private ScheduledExecutorService versionTimeoutPool;
 
 	private BlockingQueue<ConnectionEvent> eventQueue;
 
@@ -40,7 +45,10 @@ public class ConnectionTester implements Runnable {
 
 	private static final int MAX_PEERS_TO_TEST = 5000;
 	private static final long RETEST_TRY_SEC = 3600;
+	private static final long NO_VERSION_RETEST_TRY_SEC = 900;
 	private static final long RECONNECT_TRY_SEC = 30;
+
+	private static final long VERSION_TIMEOUT_SEC = 10;
 
 	private enum ConnectionEvent {
 		AVAILNEW, AVAILOLD, AVAILTEST, TIMER;
@@ -61,6 +69,8 @@ public class ConnectionTester implements Runnable {
 
 		// TODO sanity check numbers?
 		this.connTestPool = new ThreadPoolExecutor(2, 4, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
+		this.versionTestPool = new ThreadPoolExecutor(2, 4, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
+		this.versionTimeoutPool = new ScheduledThreadPoolExecutor(1);
 	}
 
 	public void giveNewNode(PeerAddress addr, long ts, boolean unsolicited) {
@@ -226,7 +236,7 @@ public class ConnectionTester implements Runnable {
 		}
 	}
 
-	public void reportFailedPeer(Peer failedPeer, String reason) {
+	public void reportTCPFailure(Peer failedPeer, String reason) {
 
 		/*
 		 * Record the failure time and remove pending test
@@ -235,6 +245,36 @@ public class ConnectionTester implements Runnable {
 		this.retryPeers.add(new PeerAddressTimePair(failedPeer.getAddress(),
 				System.currentTimeMillis() + ConnectionTester.RETEST_TRY_SEC * 1000));
 		this.myParent.logEvent("failed " + failedPeer.getAddress().toString() + " - " + reason);
+
+		/*
+		 * We have a new retest option AND an open test slot, pair of events
+		 * gogo
+		 */
+		this.eventQueue.add(ConnectionEvent.AVAILOLD);
+		this.eventQueue.add(ConnectionEvent.AVAILTEST);
+	}
+
+	public void reportTCPSuccess(Peer connPeer) {
+		VersionTestSlave nextSlave = new VersionTestSlave(this, connPeer);
+		ListenableFuture<Peer> verHandshakeFuture = connPeer.getVersionHandshakeFuture();
+		ListenableFuture<Peer> timeOutFuture = Futures.withTimeout(verHandshakeFuture,
+				ConnectionTester.VERSION_TIMEOUT_SEC, TimeUnit.SECONDS, this.versionTimeoutPool);
+		Futures.addCallback(timeOutFuture, nextSlave, this.versionTestPool);
+	}
+
+	public void reportNoVersionPeer(Peer failedPeer, String reason) {
+		/*
+		 * Force the connection closed
+		 */
+		failedPeer.close();
+
+		/*
+		 * Record the failure time and remove pending test
+		 */
+		this.myParent.getRecord(failedPeer.getAddress()).signalConnectionFailed();
+		this.retryPeers.add(new PeerAddressTimePair(failedPeer.getAddress(),
+				System.currentTimeMillis() + ConnectionTester.NO_VERSION_RETEST_TRY_SEC * 1000));
+		this.myParent.logEvent("noversion " + failedPeer.getAddress().toString() + " - " + reason);
 
 		/*
 		 * We have a new retest option AND an open test slot, pair of events
