@@ -244,7 +244,7 @@ public class ConnectionTester implements Runnable {
 		this.myParent.getRecord(failedPeer.getAddress()).signalConnectionFailed();
 		this.retryPeers.add(new PeerAddressTimePair(failedPeer.getAddress(),
 				System.currentTimeMillis() + ConnectionTester.RETEST_TRY_SEC * 1000));
-		this.myParent.logEvent("failed " + failedPeer.getAddress().toString() + " - " + reason);
+		this.myParent.logEvent("tcpfailed " + failedPeer.getAddress().toString() + " - " + reason);
 
 		/*
 		 * We have a new retest option AND an open test slot, pair of events
@@ -255,6 +255,7 @@ public class ConnectionTester implements Runnable {
 	}
 
 	public void reportTCPSuccess(Peer connPeer) {
+		this.myParent.logEvent("tcpconn " + connPeer.getAddress().toString());
 		VersionTestSlave nextSlave = new VersionTestSlave(this, connPeer);
 		ListenableFuture<Peer> verHandshakeFuture = connPeer.getVersionHandshakeFuture();
 		ListenableFuture<Peer> timeOutFuture = Futures.withTimeout(verHandshakeFuture,
@@ -274,7 +275,7 @@ public class ConnectionTester implements Runnable {
 		this.myParent.getRecord(failedPeer.getAddress()).signalConnectionFailed();
 		this.retryPeers.add(new PeerAddressTimePair(failedPeer.getAddress(),
 				System.currentTimeMillis() + ConnectionTester.NO_VERSION_RETEST_TRY_SEC * 1000));
-		this.myParent.logEvent("noversion " + failedPeer.getAddress().toString() + " - " + reason);
+		this.myParent.logEvent("versionfailed " + failedPeer.getAddress().toString() + " - " + reason);
 
 		/*
 		 * We have a new retest option AND an open test slot, pair of events

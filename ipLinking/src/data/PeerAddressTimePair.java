@@ -21,7 +21,7 @@ public class PeerAddressTimePair implements Comparable<PeerAddressTimePair> {
 	}
 
 	public int hashCode(){
-		return this.myAddr.hashCode();
+		return this.myAddr.toString().hashCode();
 	}
 	
 	public boolean equals(Object rhs) {
@@ -30,7 +30,7 @@ public class PeerAddressTimePair implements Comparable<PeerAddressTimePair> {
 		}
 
 		PeerAddressTimePair rhsObj = (PeerAddressTimePair) rhs;
-		return this.myAddr.equals(rhsObj.myAddr);
+		return this.myAddr.toString().equals(rhsObj.myAddr.toString());
 	}
 
 	public int compareTo(PeerAddressTimePair rhs) {

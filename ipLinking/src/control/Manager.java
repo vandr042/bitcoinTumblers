@@ -36,8 +36,8 @@ public class Manager implements Runnable, AddressUser {
 
 	private NioClientManager[] nioManagers;
 
-	private ConcurrentHashMap<PeerAddress, PeerRecord> records;
-	private ConcurrentHashMap<PeerAddress, Peer> peerObjs;
+	private ConcurrentHashMap<String, PeerRecord> records;
+	private ConcurrentHashMap<String, Peer> peerObjs;
 
 	private ConnectionTester connTester;
 	private AddressHarvest addrHarvester;
@@ -64,8 +64,8 @@ public class Manager implements Runnable, AddressUser {
 		/*
 		 * Internal data structures
 		 */
-		this.records = new ConcurrentHashMap<PeerAddress, PeerRecord>();
-		this.peerObjs = new ConcurrentHashMap<PeerAddress, Peer>();
+		this.records = new ConcurrentHashMap<String, PeerRecord>();
+		this.peerObjs = new ConcurrentHashMap<String, Peer>();
 
 		/*
 		 * Logging
@@ -168,15 +168,16 @@ public class Manager implements Runnable, AddressUser {
 		 * with going into unsolicitied queue, but still ends up in harvested to
 		 * queue so not that big of a deal IMO
 		 */
+		String learnedAddrStr = learnedPeer.toString();
 		synchronized (this.records) {
-			if (!this.records.containsKey(learnedPeer)) {
+			if (!this.records.containsKey(learnedAddrStr)) {
 				PeerRecord newRecord = new PeerRecord(learnedPeer, this);
-				this.records.put(learnedPeer, newRecord);
+				this.records.put(learnedAddrStr, newRecord);
 				returnFlag = true;
 			}
 		}
 		if (learnedFrom != null) {
-			this.records.get(learnedPeer).addNodeWhoKnowsMe(learnedFrom, ts);
+			this.records.get(learnedAddrStr).addNodeWhoKnowsMe(learnedFrom, ts);
 		}
 
 		return returnFlag;
@@ -184,12 +185,12 @@ public class Manager implements Runnable, AddressUser {
 
 	public void resolvedStartedPeer(Peer thePeer) {
 		this.addrHarvester.giveNewHarvestTarget(thePeer, true);
-		this.peerObjs.put(thePeer.getAddress(), thePeer);
+		this.peerObjs.put(thePeer.getAddress().toString(), thePeer);
 	}
 
 	public void cleanupDeadPeer(Peer thePeer) {
 		this.addrHarvester.poisonPeer(thePeer.getAddress());
-		this.peerObjs.remove(thePeer.getAddress());
+		this.peerObjs.remove(thePeer.getAddress().toString());
 		// TODO ensure this gets called once per peer
 		// TODO give the PeerAddress back tot he conn tester for work
 	}
@@ -200,13 +201,14 @@ public class Manager implements Runnable, AddressUser {
 
 		List<PeerAddress> harvestedAddrs = arg0.getAddresses();
 		for (PeerAddress tAddr : harvestedAddrs) {
+			String tAddrStr = tAddr.toString();
 			long logonGuess = arg1.convertTheirTimeToLocal(tAddr.getTime());
-			if (!this.records.containsKey(tAddr)) {
+			if (!this.records.containsKey(tAddrStr)) {
 				if (this.possiblyLearnPeer(tAddr, arg1.getAddress(), false, logonGuess)) {
 					this.connTester.giveNewNode(tAddr, -1 * logonGuess, false);
 				}
 			} else {
-				this.records.get(tAddr).addNodeWhoKnowsMe(arg1.getAddress(), logonGuess);
+				this.records.get(tAddrStr).addNodeWhoKnowsMe(arg1.getAddress(), logonGuess);
 			}
 		}
 	}
@@ -220,18 +222,19 @@ public class Manager implements Runnable, AddressUser {
 		 * number of seconds ahead I am)
 		 */
 		for (PeerAddress tAddr : harvestedAddrs) {
+			String tAddrStr = tAddr.toString();
 			long logonGuess = arg1.convertTheirTimeToLocal(tAddr.getTime());
-			if (!this.records.containsKey(tAddr)) {
+			if (!this.records.containsKey(tAddrStr)) {
 				this.possiblyLearnPeer(tAddr, arg1.getAddress(), true, logonGuess);
 			} else {
-				this.records.get(tAddr).addNodeWhoKnowsMe(arg1.getAddress(), logonGuess);
+				this.records.get(tAddrStr).addNodeWhoKnowsMe(arg1.getAddress(), logonGuess);
 			}
 			this.connTester.giveNewNode(tAddr, -1 * logonGuess, true);
 		}
 	}
 
 	public PeerRecord getRecord(PeerAddress addr) {
-		return this.records.get(addr);
+		return this.records.get(addr.toString());
 	}
 
 	public NioClientManager getRandomNIOClient() {
@@ -275,10 +278,10 @@ public class Manager implements Runnable, AddressUser {
 		try {
 			BufferedWriter outBuffer = new BufferedWriter(new FileWriter(file));
 			for (PeerRecord tRecord : this.records.values()) {
-				HashMap<PeerAddress, Long> freshMap = tRecord.getCopyOfNodesWhoKnow();
+				HashMap<String, Long> freshMap = tRecord.getCopyOfNodesWhoKnow();
 				outBuffer.write("***," + tRecord.getMyAddr().toString() + "\n");
-				for (PeerAddress tKnowingPeer : freshMap.keySet()) {
-					outBuffer.write(tKnowingPeer.toString() + "," + freshMap.get(tKnowingPeer) + "\n");
+				for (String tKnowingPeer : freshMap.keySet()) {
+					outBuffer.write(tKnowingPeer + "," + freshMap.get(tKnowingPeer) + "\n");
 				}
 			}
 			outBuffer.close();
@@ -290,10 +293,10 @@ public class Manager implements Runnable, AddressUser {
 	public void dumpTimeSkew(String file) {
 		try {
 			BufferedWriter outBuffer = new BufferedWriter(new FileWriter(file));
-			for (PeerAddress tAddr : this.peerObjs.keySet()) {
+			for (String tAddr : this.peerObjs.keySet()) {
 				Peer tPeer = this.peerObjs.get(tAddr);
 				if (tPeer != null) {
-					outBuffer.write(tPeer.getAddress().toString() + "," + tPeer.getClockSkewGuess() + "\n");
+					outBuffer.write(tAddr + "," + tPeer.getClockSkewGuess() + "\n");
 				}
 			}
 			outBuffer.close();

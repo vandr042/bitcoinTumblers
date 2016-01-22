@@ -13,7 +13,7 @@ public class PeerRecord {
 	private long timeDisconnected;
 	private long timeConnFailed;
 	private long lastUptime;
-	private HashMap<PeerAddress, Long> peersWhoKnowMe;
+	private HashMap<String, Long> peersWhoKnowMe;
 
 	private Manager myParent;
 
@@ -23,7 +23,7 @@ public class PeerRecord {
 		this.timeDisconnected = -1;
 		this.timeConnFailed = -1;
 		this.lastUptime = 0;
-		this.peersWhoKnowMe = new HashMap<PeerAddress, Long>();
+		this.peersWhoKnowMe = new HashMap<String, Long>();
 		this.myParent = parent;
 	}
 
@@ -32,7 +32,7 @@ public class PeerRecord {
 			return false;
 		}
 
-		return this.myAddr.equals(((PeerRecord) rhs).myAddr);
+		return this.myAddr.toString().equals(((PeerRecord) rhs).myAddr.toString());
 	}
 
 	public void signalConnected() {
@@ -87,13 +87,14 @@ public class PeerRecord {
 
 	public boolean addNodeWhoKnowsMe(PeerAddress nodeWhoKnows, Long ts) {
 		boolean retFlag = false;
+		String addrWhoKnowsStr = nodeWhoKnows.toString();
 		synchronized (this.peersWhoKnowMe) {
-			retFlag = this.peersWhoKnowMe.containsKey(nodeWhoKnows);
-			if (retFlag && this.peersWhoKnowMe.get(nodeWhoKnows) != ts) {
-				this.myParent.logEvent("TS update for " + this.myAddr.toString() + " from " + nodeWhoKnows.toString()
-						+ "(" + this.peersWhoKnowMe.get(nodeWhoKnows) + "," + ts + ")");
+			retFlag = this.peersWhoKnowMe.containsKey(addrWhoKnowsStr);
+			if (retFlag && this.peersWhoKnowMe.get(addrWhoKnowsStr) != ts) {
+				this.myParent.logEvent("TS update for " + this.myAddr.toString() + " from " + addrWhoKnowsStr
+						+ "(" + this.peersWhoKnowMe.get(addrWhoKnowsStr) + "," + ts + ")");
 			}
-			this.peersWhoKnowMe.put(nodeWhoKnows, ts);
+			this.peersWhoKnowMe.put(addrWhoKnowsStr, ts);
 		}
 		return retFlag;
 	}
@@ -122,11 +123,11 @@ public class PeerRecord {
 		return timeConnFailed;
 	}
 
-	public HashMap<PeerAddress, Long> getCopyOfNodesWhoKnow() {
-		HashMap<PeerAddress, Long> cloneMap = new HashMap<PeerAddress, Long>();
+	public HashMap<String, Long> getCopyOfNodesWhoKnow() {
+		HashMap<String, Long> cloneMap = new HashMap<String, Long>();
 
 		synchronized (this.peersWhoKnowMe) {
-			for (PeerAddress tAddr : this.peersWhoKnowMe.keySet()) {
+			for (String tAddr : this.peersWhoKnowMe.keySet()) {
 				cloneMap.put(tAddr, this.peersWhoKnowMe.get(tAddr));
 			}
 		}

@@ -21,7 +21,7 @@ public class PeerTimePair implements Comparable<PeerTimePair> {
 	}
 
 	public int hashCode(){
-		return this.myPeer.getAddress().hashCode();
+		return this.myPeer.getAddress().toString().hashCode();
 	}
 	
 	public boolean equals(Object rhs) {
@@ -30,7 +30,7 @@ public class PeerTimePair implements Comparable<PeerTimePair> {
 		}
 
 		PeerTimePair rhsObj = (PeerTimePair) rhs;
-		return this.myPeer.getAddress().equals(rhsObj.myPeer.getAddress());
+		return this.myPeer.getAddress().toString().equals(rhsObj.myPeer.getAddress().toString());
 	}
 
 	public int compareTo(PeerTimePair rhs) {

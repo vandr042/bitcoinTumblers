@@ -14,7 +14,7 @@ public class AddressHarvest implements Runnable {
 	private Random rng;
 
 	private PriorityBlockingQueue<PeerTimePair> toTestQueue;
-	private Set<PeerAddress> blackListSet;
+	private Set<String> blackListSet;
 
 	private static final long MIN_HARVEST_INTERVAL_SEC = 15;
 
@@ -23,7 +23,7 @@ public class AddressHarvest implements Runnable {
 		this.rng = new Random();
 
 		this.toTestQueue = new PriorityBlockingQueue<PeerTimePair>();
-		this.blackListSet = new HashSet<PeerAddress>();
+		this.blackListSet = new HashSet<String>();
 	}
 
 	public void giveNewHarvestTarget(Peer newPeer, boolean jitter) {
@@ -38,7 +38,7 @@ public class AddressHarvest implements Runnable {
 	
 	public void poisonPeer(PeerAddress addr){
 		synchronized(this.blackListSet){
-			this.blackListSet.add(addr);
+			this.blackListSet.add(addr.toString());
 		}
 	}
 
@@ -55,7 +55,7 @@ public class AddressHarvest implements Runnable {
 				while (tmpPair == null) {
 					tmpPair = this.toTestQueue.take();
 					synchronized (this.blackListSet) {
-						if (this.blackListSet.remove(tmpPair.getPeer().getAddress())) {
+						if (this.blackListSet.remove(tmpPair.getPeer().getAddress().toString())) {
 							tmpPair = null;
 						}
 					}
