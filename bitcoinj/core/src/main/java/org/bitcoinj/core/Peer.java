@@ -85,7 +85,8 @@ public class Peer extends PeerSocketHandler {
 
 	// MJS added for fast parsing of Address responses
 	private Boolean solicitFlag;
-	private AddressUser addrConsumer;
+	private AddressUser solicAddressConsumer;
+	private AddressUser unsolAddressConsumer;
 
 	// MJS added for rough attempt at insecure time synch
 	private long clockSkewGuess;
@@ -337,7 +338,8 @@ public class Peer extends PeerSocketHandler {
 
 		this.clockSkewGuess = 0;
 		this.solicitFlag = false;
-		this.addrConsumer = null;
+		this.solicAddressConsumer = null;
+		this.unsolAddressConsumer = null;
 	}
 
 	/**
@@ -623,8 +625,12 @@ public class Peer extends PeerSocketHandler {
 			future.set(m);
 	}
 
-	public void registerAddressConsumer(AddressUser addressConsumer) {
-		this.addrConsumer = addressConsumer;
+	public void registerSolAddressConsumer(AddressUser addressConsumer) {
+		this.solicAddressConsumer = addressConsumer;
+	}
+
+	public void registerUnsolAddressConsumer(AddressUser addressConsumer) {
+		this.unsolAddressConsumer = addressConsumer;
 	}
 
 	private void processAddressMessage(AddressMessage m) {
@@ -635,16 +641,20 @@ public class Peer extends PeerSocketHandler {
 		 * unsolicted as solicited and the next message vice versa, but meh,
 		 * that's not that large of a deal
 		 */
-		if (this.addrConsumer != null) {
-			synchronized (this.solicitFlag) {
-				if (this.solicitFlag.booleanValue()) {
-					this.addrConsumer.getSolicitedAddresses(m, this);
-					this.solicitFlag = false;
-				} else {
-					this.addrConsumer.getUnsolicitedAddresses(m, this);
+
+		synchronized (this.solicitFlag) {
+			if (this.solicitFlag.booleanValue()) {
+				if(this.solicAddressConsumer != null){
+					this.solicAddressConsumer.getAddresses(m, this);
+				}
+				this.solicitFlag = false;
+			} else {
+				if(this.unsolAddressConsumer != null){
+					this.unsolAddressConsumer.getAddresses(m, this);
 				}
 			}
 		}
+
 		if (Peer.LOBOTOMIZE) {
 			return;
 		}
@@ -2215,12 +2225,12 @@ public class Peer extends PeerSocketHandler {
 	public long getClockSkewGuess() {
 		return this.clockSkewGuess;
 	}
-	
-	public long convertLocalTimeToThiers(long ts){
+
+	public long convertLocalTimeToThiers(long ts) {
 		return ts - this.clockSkewGuess;
 	}
-	
-	public long convertTheirTimeToLocal(long ts){
+
+	public long convertTheirTimeToLocal(long ts) {
 		return ts + this.clockSkewGuess;
 	}
 }
