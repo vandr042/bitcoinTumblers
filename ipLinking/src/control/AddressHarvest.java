@@ -1,12 +1,16 @@
 package control;
 
 import java.util.*;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import org.bitcoinj.core.Peer;
 import org.bitcoinj.core.PeerAddress;
 
 import data.PeerTimePair;
+import listeners.BurstableHarvester;
 
 public class AddressHarvest implements Runnable {
 
@@ -15,6 +19,8 @@ public class AddressHarvest implements Runnable {
 
 	private PriorityBlockingQueue<PeerTimePair> toTestQueue;
 	private Set<String> blackListSet;
+	
+	private ThreadPoolExecutor burstThreadPool;
 
 	private static final long MIN_HARVEST_INTERVAL_SEC = 15;
 
@@ -24,6 +30,8 @@ public class AddressHarvest implements Runnable {
 
 		this.toTestQueue = new PriorityBlockingQueue<PeerTimePair>();
 		this.blackListSet = new HashSet<String>();
+		
+		this.burstThreadPool = new ThreadPoolExecutor(1, 10, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
 	}
 
 	public void giveNewHarvestTarget(Peer newPeer, boolean jitter) {
@@ -40,6 +48,14 @@ public class AddressHarvest implements Runnable {
 		synchronized(this.blackListSet){
 			this.blackListSet.add(addr.toString());
 		}
+	}
+	
+	public void startNewBurstHarvest(Peer targetPeer){
+		
+	}
+	
+	public void restartBurst(BurstableHarvester runningHarvester){
+		
 	}
 
 	@Override

@@ -194,27 +194,9 @@ public class Manager implements Runnable, AddressUser {
 		// TODO ensure this gets called once per peer
 		// TODO give the PeerAddress back tot he conn tester for work
 	}
-
+	
 	@Override
-	public void getSolicitedAddresses(AddressMessage arg0, Peer arg1) {
-		this.logEvent("Solicted push of " + arg0.getAddresses().size() + " from " + arg1.getAddress());
-
-		List<PeerAddress> harvestedAddrs = arg0.getAddresses();
-		for (PeerAddress tAddr : harvestedAddrs) {
-			String tAddrStr = tAddr.toString();
-			long logonGuess = arg1.convertTheirTimeToLocal(tAddr.getTime());
-			if (!this.records.containsKey(tAddrStr)) {
-				if (this.possiblyLearnPeer(tAddr, arg1.getAddress(), false, logonGuess)) {
-					this.connTester.giveNewNode(tAddr, -1 * logonGuess, false);
-				}
-			} else {
-				this.records.get(tAddrStr).addNodeWhoKnowsMe(arg1.getAddress(), logonGuess);
-			}
-		}
-	}
-
-	@Override
-	public void getUnsolicitedAddresses(AddressMessage arg0, Peer arg1) {
+	public void getAddresses(AddressMessage arg0, Peer arg1) {
 		this.logEvent("Unsolicted  push of " + arg0.getAddresses().size() + " from " + arg1.getAddress());
 		List<PeerAddress> harvestedAddrs = arg0.getAddresses();
 		/*
@@ -367,5 +349,4 @@ public class Manager implements Runnable, AddressUser {
 		}
 		inScanner.close();
 	}
-
 }

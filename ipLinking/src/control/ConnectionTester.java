@@ -8,7 +8,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -217,7 +216,8 @@ public class ConnectionTester implements Runnable {
 			 */
 			Peer peerObj = new Peer(this.myParent.getParams(), new VersionMessage(this.myParent.getParams(), 0), toTest,
 					null, false);
-			peerObj.registerAddressConsumer(this.myParent);
+			peerObj.registerSolAddressConsumer(this.myParent);
+			peerObj.registerUnsolAddressConsumer(this.myParent);
 			ConnTestSlave testSlave = new ConnTestSlave(peerObj, this);
 			ListenableFuture<SocketAddress> connFuture = this.myParent.getRandomNIOClient()
 					.openConnection(toTest.getSocketAddress(), peerObj);
