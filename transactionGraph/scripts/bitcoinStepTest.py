@@ -23,18 +23,20 @@ class StepTest:
 
     def threadFunc(self,numAddr):
         roundsList = []
-        for i in range(0,1000):
+        for i in range(0,2):
             test = bitcoinBloomTest.BitcoinBloomTest(self.goalPercentage, numAddr)
             roundsList.append(test.runTest())
         meanRounds = numpy.mean(roundsList)
+        print(5)
         std = numpy.std(roundsList)
         median = numpy.std(roundsList)
         self.testResults[numAddr] = [meanRounds,std,median]
+        
         return
 
     def runTest(self):
         threads = []
-        while (self.numAddresses <= 600000):
+        while (self.numAddresses <= 100000):
             threads.append(threading.Thread(target = self.threadFunc, args = (self.numAddresses,)))
             threads[len(threads)-1].start()
             self.numAddresses += self.step
