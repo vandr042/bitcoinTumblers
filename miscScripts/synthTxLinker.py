@@ -22,7 +22,7 @@ def runSim(pubList, privList, privConnMap, pubConnMap):
         detectCount = random.randint(4, 7)
         tList = list(privConnMap[tPriv])
         for i in range(detectCount):
-            outFP.write("remoteconn," + tPriv + "," + tList[i] + str(currentTime) + "\n")
+            outFP.write("remoteconn," + tPriv + "," + tList[i] + "," + str(currentTime) + "\n")
             currentTime = currentTime + random.randint(3, 500)
     for i in range(100):
         currentTime = currentTime + random.randint(1000, 5000)
