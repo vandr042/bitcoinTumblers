@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 import java.util.Scanner;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.io.BufferedWriter;
@@ -29,6 +30,7 @@ import org.bitcoinj.params.MainNetParams;
 import data.PeerRecord;
 import logging.ThreadedWriter;
 
+//TODO general issue, we never actually restart the address harvester after the first harvest...
 public class Manager implements Runnable, AddressUser {
 
 	private NetworkParameters params;
@@ -126,7 +128,6 @@ public class Manager implements Runnable, AddressUser {
 		}
 		for (PeerAddress tPeer : dnsPeers) {
 			this.possiblyLearnPeer(tPeer, null, false, 0);
-			this.connTester.giveNewNode(tPeer, 0, false);
 		}
 	}
 
@@ -174,6 +175,7 @@ public class Manager implements Runnable, AddressUser {
 				PeerRecord newRecord = new PeerRecord(learnedPeer, this);
 				this.records.put(learnedAddrStr, newRecord);
 				returnFlag = true;
+				this.connTester.giveNewNode(learnedPeer, ts, unsolicitied);
 			}
 		}
 		if (learnedFrom != null) {
@@ -195,6 +197,12 @@ public class Manager implements Runnable, AddressUser {
 		// TODO give the PeerAddress back tot he conn tester for work
 	}
 	
+	public void getBurstResults(PeerAddress fromPeer, Set<PeerAddress> harvestedAddrs){
+		for(PeerAddress tLearned: harvestedAddrs){
+			this.handleAddressNotificiation(tLearned, this.peerObjs.get(fromPeer.toString()));
+		}
+	}
+	
 	@Override
 	public void getAddresses(AddressMessage arg0, Peer arg1) {
 		this.logEvent("Unsolicted  push of " + arg0.getAddresses().size() + " from " + arg1.getAddress());
@@ -204,14 +212,17 @@ public class Manager implements Runnable, AddressUser {
 		 * number of seconds ahead I am)
 		 */
 		for (PeerAddress tAddr : harvestedAddrs) {
-			String tAddrStr = tAddr.toString();
-			long logonGuess = arg1.convertTheirTimeToLocal(tAddr.getTime());
-			if (!this.records.containsKey(tAddrStr)) {
-				this.possiblyLearnPeer(tAddr, arg1.getAddress(), true, logonGuess);
-			} else {
-				this.records.get(tAddrStr).addNodeWhoKnowsMe(arg1.getAddress(), logonGuess);
-			}
-			this.connTester.giveNewNode(tAddr, -1 * logonGuess, true);
+			this.handleAddressNotificiation(tAddr, arg1);
+		}
+	}
+	
+	private void handleAddressNotificiation(PeerAddress incAddr, Peer learnedFrom){
+		String tAddrStr = incAddr.toString();
+		long logonGuess = learnedFrom.convertTheirTimeToLocal(incAddr.getTime());
+		if (!this.records.containsKey(tAddrStr)) {
+			this.possiblyLearnPeer(incAddr, learnedFrom.getAddress(), true, logonGuess);
+		} else {
+			this.records.get(tAddrStr).addNodeWhoKnowsMe(learnedFrom.getAddress(), logonGuess);
 		}
 	}
 

@@ -24,6 +24,7 @@ import listeners.ConnTestSlave;
 import listeners.DeadPeerListener;
 import listeners.VersionTestSlave;
 
+//TODO IMO since we're governed by the all might time stamp, get rid of the idea of solicited vs unsolicited
 public class ConnectionTester implements Runnable {
 
 	private Manager myParent;
@@ -216,8 +217,7 @@ public class ConnectionTester implements Runnable {
 			 */
 			Peer peerObj = new Peer(this.myParent.getParams(), new VersionMessage(this.myParent.getParams(), 0), toTest,
 					null, false);
-			peerObj.registerSolAddressConsumer(this.myParent);
-			peerObj.registerUnsolAddressConsumer(this.myParent);
+			peerObj.registerAddressConsumer(this.myParent);
 			ConnTestSlave testSlave = new ConnTestSlave(peerObj, this);
 			ListenableFuture<SocketAddress> connFuture = this.myParent.getRandomNIOClient()
 					.openConnection(toTest.getSocketAddress(), peerObj);
