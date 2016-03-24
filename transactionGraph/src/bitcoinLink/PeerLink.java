@@ -1,20 +1,23 @@
 package bitcoinLink;
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Set;
-import java.util.ArrayList;
 import java.util.regex.*;
 
 
 public class PeerLink {
 	private HashMap<String, HashSet<String>> pMap; //(Peer, peers connected to) pairs
 	private HashMap<String, LinkedList<TStampPeerPair>> txMap; //Mapping from txID to (peer,timestamp peer says it saw tx) pairs 
+	File f = new File("simtest.log");
+	BufferedWriter bw = new BufferedWriter(new FileWriter(f));
 	public PeerLink(String dataFile) throws IOException{
 		pMap = new HashMap<String, HashSet<String>>();
 		txMap = new HashMap<String, LinkedList<TStampPeerPair>>();
@@ -22,19 +25,23 @@ public class PeerLink {
 	}
 	
 	/* sim calls findSender on each transaction in txMap and returns a map from txID's to the set of possible senders */
-	public HashMap<String, HashSet<String>> sim(int searchDepth){
+	public HashMap<String, HashSet<String>> sim(int searchDepth) throws IOException{
+		System.out.println("Starting simulation with search depth: " + searchDepth);
 		HashMap<String, HashSet<String>> txToPeersMap = new HashMap<String, HashSet<String>>();
 		Set<String> txIDs = txMap.keySet();
-		String[] txArr = (String[]) txIDs.toArray();
+		String[] txArr = new String[txIDs.size()];
+		txIDs.toArray(txArr);
 		for (String tx:txArr){
+			//bw.write("tx: " + tx + "\n");
 			txToPeersMap.put(tx, this.findSender(tx,searchDepth));
 		}
+		//bw.close();
 		return txToPeersMap;
 	}
 
-	private HashSet<String> findSender(String tx, int searchDepth){
+	private HashSet<String> findSender(String tx, int searchDepth) throws IOException{
 		LinkedList<TStampPeerPair> tsppList = txMap.get(tx);
-		tsppList.sort(null);
+		Collections.sort(tsppList);
 		TStampPeerPair tspp = tsppList.get(0);
 		String peer = tspp.getPeer();
 		HashSet<String> peerConns = pMap.get(peer);
@@ -51,22 +58,13 @@ public class PeerLink {
 				break;
 			}
 		}
-		
+		//bw.write("intersected set: " + intersectConns.toString() + "\n");
 		if (intersectConns.size() == 0){
 			return trailIConns;
 		}else{
 			return intersectConns;
 		}
 	}
-	
-	/*private String recIntersection(int index){
-	}
-	
-	private HashSet<String> Intersect(HashSet<String> set1, HashSet<String> set2){
-		HashSet<String> clone = (HashSet<String>) set1.clone();
-		set1.removeAll(set2);
-		
-	}*/
 	
 	private void buildMapsFromFile(String filename) throws IOException{
 		File f = new File(filename);
@@ -76,6 +74,7 @@ public class PeerLink {
 		Pattern p = Pattern.compile(regex);
 	
 		/* pattern match each line to build peer map */
+		System.out.println("Building maps from file...");
 		String line = reader.readLine();
 		while (line != null){
 			Matcher m = p.matcher(line);
@@ -115,10 +114,12 @@ public class PeerLink {
 			line = reader.readLine();
 		}
 		reader.close();
+		System.out.println("Finished building maps...");
 	}
 	
 	public static void main(String[] args) throws IOException {
 		PeerLink pl = new PeerLink("/home/connor/workspace/bitcoinTumblers/miscScripts/peer-finder-synth-out.log");
+		pl.sim(2);
 		//System.out.println(pl.pMap.keySet().toString());
 		//System.out.println(pl.txMap.keySet().toString());
 		//System.out.println(pl.pMap.values().toString());
