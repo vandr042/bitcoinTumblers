@@ -6,44 +6,67 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.Set;
 import java.util.ArrayList;
 import java.util.regex.*;
 
 
 public class PeerLink {
-	HashMap<String, HashSet<String>> pMap; //(Peer, peers connected to) pairs
-	HashMap<String, HashMap<String,ArrayList<String>>> txMap; //Mapping from txID to (peer,timestamp peer says it saw tx) pairs 
+	private HashMap<String, HashSet<String>> pMap; //(Peer, peers connected to) pairs
+	private HashMap<String, LinkedList<TStampPeerPair>> txMap; //Mapping from txID to (peer,timestamp peer says it saw tx) pairs 
 	public PeerLink(String dataFile) throws IOException{
 		pMap = new HashMap<String, HashSet<String>>();
-		txMap = new HashMap<String, HashMap<String,ArrayList<String>>>();
+		txMap = new HashMap<String, LinkedList<TStampPeerPair>>();
 		buildMapsFromFile(dataFile);
+	}
+	
+	/* sim calls findSender on each transaction in txMap and returns a map from txID's to the set of possible senders */
+	public HashMap<String, HashSet<String>> sim(int searchDepth){
+		HashMap<String, HashSet<String>> txToPeersMap = new HashMap<String, HashSet<String>>();
+		Set<String> txIDs = txMap.keySet();
+		String[] txArr = (String[]) txIDs.toArray();
+		for (String tx:txArr){
+			txToPeersMap.put(tx, this.findSender(tx,searchDepth));
+		}
+		return txToPeersMap;
+	}
+
+	private HashSet<String> findSender(String tx, int searchDepth){
+		LinkedList<TStampPeerPair> tsppList = txMap.get(tx);
+		tsppList.sort(null);
+		TStampPeerPair tspp = tsppList.get(0);
+		String peer = tspp.getPeer();
+		HashSet<String> peerConns = pMap.get(peer);
+		HashSet<String> intersectConns = (HashSet<String>) peerConns.clone();
+		HashSet<String> trailIConns = (HashSet<String>) intersectConns.clone();
+		for (int i = 1; i < searchDepth; i++){
+			TStampPeerPair tmpTSPP = tsppList.get(i);
+			String tmpPeer = tmpTSPP.getPeer();
+			HashSet<String> tmpPeerConns = pMap.get(tmpPeer);
+			intersectConns.removeAll(tmpPeerConns);
+			if (intersectConns.size() > 1){
+				trailIConns = (HashSet<String>) intersectConns.clone();
+			}else{
+				break;
+			}
+		}
 		
+		if (intersectConns.size() == 0){
+			return trailIConns;
+		}else{
+			return intersectConns;
+		}
 	}
 	
-	//public HashMap<String, LinkedList<String>> sim(){return null;}
-	
-	private String findSender(String tx){
-		HashMap<String,ArrayList<String>> pTStampMap = txMap.get(tx);
-		String[] tstamps = (String[]) pTStampMap.keySet().toArray();
-		tstamps.
-		return null;
-	}
-	
-	private String recIntersection(int index){
-	}
-	
-	private static String[] sortTimestamps(String[] tstamps, int start, int end){
-		if (start == end)
-			return tstamps;
-		int k;
-		k = (tstamps.length/2)
+	/*private String recIntersection(int index){
 	}
 	
 	private HashSet<String> Intersect(HashSet<String> set1, HashSet<String> set2){
 		HashSet<String> clone = (HashSet<String>) set1.clone();
 		set1.removeAll(set2);
 		
-	}
+	}*/
 	
 	private void buildMapsFromFile(String filename) throws IOException{
 		File f = new File(filename);
@@ -78,16 +101,15 @@ public class PeerLink {
 				peerConns = pMap.get(toAddr);
 				peerConns.add(addr);
 			}else{
-				HashMap<String,ArrayList<String>> pTStampMap = txMap.get(txID);
-				if (pTStampMap != null){
-					ArrayList<String> peerList = pTStampMap.get(timeStamp);
-					peerList.add(addr);
+				LinkedList<TStampPeerPair> tsppList = txMap.get(txID);
+				if (tsppList != null){
+					TStampPeerPair tspp = new TStampPeerPair(timeStamp,addr);
+					tsppList.add(tspp);
 				}else{
-					pTStampMap = new HashMap<String,ArrayList<String>>();
-					ArrayList<String> peerList = new ArrayList<String>();
-					peerList.add(addr);
-					pTStampMap.put(timeStamp,peerList);
-					txMap.put(txID, pTStampMap);
+					tsppList = new LinkedList<TStampPeerPair>();
+					TStampPeerPair tspp = new TStampPeerPair(timeStamp, addr);
+					tsppList.add(tspp);
+					txMap.put(txID, tsppList);
 				}
 			}
 			line = reader.readLine();
