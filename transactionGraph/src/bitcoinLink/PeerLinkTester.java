@@ -27,19 +27,28 @@ public class PeerLinkTester{
 		buildMapFromTruth(truthFile);
 	}
 	
+	/* testForBestDepth runs PeerLink.sim for a specified number of different depths and outputs the accuracies to file */
 	public void testForBestDepth() throws IOException{
 		System.out.println("********************************** Testing for Depth ************************************");
 		File f = new File("peerLinkSizeTest.log");
 		BufferedWriter bw = new BufferedWriter(new FileWriter(f));
 		for (int searchDepth = depthStep; searchDepth < maxDepth; searchDepth += depthStep){
-			float accuracy;
+			float avgSetSize,accuracy, totalSets, numPeers;
+			numPeers = 0;
 			HashMap <String, HashSet<String>> txToPeers = peerLink.sim(searchDepth);
+			Collection<HashSet<String>> peers = txToPeers.values();
+			for (HashSet<String> pset:peers){
+				numPeers += pset.size();
+			}
+			totalSets = peers.size();
+			avgSetSize = numPeers/totalSets;
 			accuracy = this.checkAccuracy(txToPeers);
-			bw.write("Depth: " + searchDepth + " Accuracy: " + accuracy + "\n");
+			bw.write("Depth: " + searchDepth + " Accuracy: " + accuracy + " avgSetSize: " + avgSetSize + "\n");
 		}
 		bw.close();
 	}
 	
+	/* private helper */
 	private float checkAccuracy(HashMap<String,HashSet<String>> txPeerMap){
 		float accuracy, totalTx, correct;
 		correct = 0;
@@ -57,6 +66,7 @@ public class PeerLinkTester{
 		return accuracy;
 	}
 	
+	/* called in constructor to build truth map */
 	private void buildMapFromTruth(String filename) throws IOException{
 		File f = new File(filename);
 		BufferedReader reader = new BufferedReader(new FileReader(f));

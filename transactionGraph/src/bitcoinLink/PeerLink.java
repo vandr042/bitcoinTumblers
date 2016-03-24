@@ -39,6 +39,7 @@ public class PeerLink {
 		return txToPeersMap;
 	}
 
+	/* findSender starts at the earliest known timestamp and iterates to a specified search depth, intersecting the peerConn sets */
 	private HashSet<String> findSender(String tx, int searchDepth) throws IOException{
 		LinkedList<TStampPeerPair> tsppList = txMap.get(tx);
 		Collections.sort(tsppList);
@@ -46,7 +47,7 @@ public class PeerLink {
 		String peer = tspp.getPeer();
 		HashSet<String> peerConns = pMap.get(peer);
 		HashSet<String> intersectConns = (HashSet<String>) peerConns.clone();
-		HashSet<String> trailIConns = (HashSet<String>) intersectConns.clone();
+		HashSet<String> trailIConns = (HashSet<String>) intersectConns.clone(); //in case we reach 0 peers in the set
 		for (int i = 1; i < searchDepth; i++){
 			TStampPeerPair tmpTSPP = tsppList.get(i);
 			String tmpPeer = tmpTSPP.getPeer();
@@ -59,8 +60,8 @@ public class PeerLink {
 			}
 		}
 		//bw.write("intersected set: " + intersectConns.toString() + "\n");
-		if (intersectConns.size() == 0){
-			return trailIConns;
+		if (intersectConns.size() == 0){ //step back
+			return trailIConns; 
 		}else{
 			return intersectConns;
 		}
