@@ -96,9 +96,13 @@ public class PeerLinkTester{
 		//System.out.println("Finished building maps...");
 	}
 	
+	public HashMap<String, String> getTruthMap(){
+		return this.truthTxToPeer;
+	}
+	
 	public static void main(String[] args) throws IOException{
 		PeerLink pl = new PeerLink("/home/connor/workspace/bitcoinTumblers/miscScripts/peer-finder-synth-out.log");
-		PeerLinkTester test = new PeerLinkTester(1,pl,10, "/home/connor/workspace/bitcoinTumblers/miscScripts/peer-finder-synth-groundTruth.log");
+		PeerLinkTester test = new PeerLinkTester(1,pl,1000, "/home/connor/workspace/bitcoinTumblers/miscScripts/peer-finder-synth-groundTruth.log");
 		test.testForBestDepth();
 		
 	}

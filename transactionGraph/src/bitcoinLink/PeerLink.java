@@ -52,7 +52,7 @@ public class PeerLink {
 			TStampPeerPair tmpTSPP = tsppList.get(i);
 			String tmpPeer = tmpTSPP.getPeer();
 			HashSet<String> tmpPeerConns = pMap.get(tmpPeer);
-			intersectConns.removeAll(tmpPeerConns);
+			intersectConns.retainAll(tmpPeerConns);
 			if (intersectConns.size() > 1){
 				trailIConns = (HashSet<String>) intersectConns.clone();
 			}else{
@@ -116,6 +116,13 @@ public class PeerLink {
 		}
 		reader.close();
 		System.out.println("Finished building maps...");
+	}
+	
+	public HashMap<String, HashSet<String>> getPmap(){
+		return pMap;
+	}
+	public HashMap<String, LinkedList<TStampPeerPair>> getTxMap(){
+		return txMap;
 	}
 	
 	public static void main(String[] args) throws IOException {
