@@ -6,6 +6,7 @@ public class valueset {
     
     public static void main(String[] args){
         AccountManager manager = new AccountManager();
+        manager.goToBlockchainExplorer();
         List<Integer> anonSizes = manager.runExperiment(false);
         
         int sum = 0;

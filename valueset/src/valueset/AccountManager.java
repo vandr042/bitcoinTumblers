@@ -7,13 +7,21 @@ public class AccountManager {
 
 	private ArrayList<Transaction> deposits = null;
 	private ArrayList<Transaction> withdrawls = null;
+	
+	private HashMap<String, Set<String>> alliases = null;
 
 	public AccountManager() {
 		this.deposits = new ArrayList<Transaction>();
 		this.withdrawls = new ArrayList<Transaction>();
+		this.alliases = new HashMap<String, Set<String>>();
 		this.importData("../miscScripts/balance-synth.log");
 		Collections.sort(this.deposits);
 		Collections.sort(this.withdrawls);
+	}
+	
+	public void goToBlockchainExplorer(){
+		//TODO do the blockchain explorer step
+		//WILL BUILD the alliases data structure
 	}
 
 	public List<Integer> runExperiment(boolean reportKeys) {
