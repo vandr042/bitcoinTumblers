@@ -15,7 +15,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class PeerLinkTester{
-	/* depth of ~275 to get to 1 intersection */
+	/* depth of ~275 to get to 1 peer */
 	private HashMap<String, String> truthTxToPeer = new HashMap<String,String>(); 
 	private int depthStep;
 	private PeerLink peerLink;
