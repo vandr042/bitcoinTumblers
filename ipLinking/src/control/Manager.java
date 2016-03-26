@@ -9,7 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 import java.util.Scanner;
-import java.util.Set;
+import java.util.HashSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.io.BufferedWriter;
@@ -28,9 +28,9 @@ import org.bitcoinj.net.discovery.PeerDiscoveryException;
 import org.bitcoinj.params.MainNetParams;
 
 import data.PeerRecord;
+import data.SanatizedRecord;
 import logging.ThreadedWriter;
 
-//TODO general issue, we never actually restart the address harvester after the first harvest...
 public class Manager implements Runnable, AddressUser {
 
 	private NetworkParameters params;
@@ -38,12 +38,13 @@ public class Manager implements Runnable, AddressUser {
 
 	private NioClientManager[] nioManagers;
 
-	private ConcurrentHashMap<String, PeerRecord> records;
-	private ConcurrentHashMap<String, Peer> peerObjs;
+	private ConcurrentHashMap<SanatizedRecord, PeerRecord> records;
+	private ConcurrentHashMap<SanatizedRecord, Peer> peerObjs;
 
 	private ConnectionTester connTester;
 	private AddressHarvest addrHarvester;
 
+	private int myLogLevel;
 	private ThreadedWriter runLog;
 	private ThreadedWriter exceptionLog;
 
@@ -52,7 +53,11 @@ public class Manager implements Runnable, AddressUser {
 	private static final DateFormat LONG_DF = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 	private static final long STATUSREPORT_INTERVAL_SEC = 120;
 
-	private static final int NIO_CLIENT_MGER_COUNT = 4;
+	private static final int NIO_CLIENT_MGER_COUNT = 2;
+
+	public static final int EMERGENCY_LOG_LEVEL = 1;
+	public static final int CRIT_LOG_LEVEL = 2;
+	public static final int DEBUG_LOG_LEVEL = 3;
 
 	public Manager() throws IOException {
 		/*
@@ -66,8 +71,8 @@ public class Manager implements Runnable, AddressUser {
 		/*
 		 * Internal data structures
 		 */
-		this.records = new ConcurrentHashMap<String, PeerRecord>();
-		this.peerObjs = new ConcurrentHashMap<String, Peer>();
+		this.records = new ConcurrentHashMap<SanatizedRecord, PeerRecord>();
+		this.peerObjs = new ConcurrentHashMap<SanatizedRecord, Peer>();
 
 		/*
 		 * Logging
@@ -75,6 +80,7 @@ public class Manager implements Runnable, AddressUser {
 		String logName = Manager.getTimestamp();
 		this.runLog = new ThreadedWriter(logName, true);
 		this.exceptionLog = new ThreadedWriter(logName + "-err", true);
+		this.myLogLevel = Manager.CRIT_LOG_LEVEL;
 		Thread loggingThread = new Thread(this.runLog);
 		Thread exceptionThread = new Thread(this.exceptionLog);
 		loggingThread.setName("Logging thread.");
@@ -87,7 +93,7 @@ public class Manager implements Runnable, AddressUser {
 		/*
 		 * Spin up NIO client
 		 */
-		this.logEvent("NIO start");
+		this.logEvent("NIO start", Manager.EMERGENCY_LOG_LEVEL);
 		this.nioManagers = new NioClientManager[Manager.NIO_CLIENT_MGER_COUNT];
 		for (int counter = 0; counter < this.nioManagers.length; counter++) {
 			this.nioManagers[counter] = new NioClientManager(Thread.NORM_PRIORITY);
@@ -98,7 +104,7 @@ public class Manager implements Runnable, AddressUser {
 		for (NioClientManager tManager : this.nioManagers) {
 			tManager.awaitRunning();
 		}
-		this.logEvent("NIO start done");
+		this.logEvent("NIO start done", Manager.EMERGENCY_LOG_LEVEL);
 
 		/*
 		 * Start ze address harvester
@@ -120,14 +126,14 @@ public class Manager implements Runnable, AddressUser {
 		/*
 		 * Learn peers from the DNS Discovery system of bitcoin
 		 */
-		this.logEvent("DNS bootstrap start");
+		this.logEvent("DNS bootstrap start", Manager.EMERGENCY_LOG_LEVEL);
 		PeerAddress[] dnsPeers = this.buildDNSBootstrap();
-		this.logEvent("DNS boostrap done");
+		this.logEvent("DNS boostrap done", Manager.EMERGENCY_LOG_LEVEL);
 		if (dnsPeers == null) {
 			throw new RuntimeException("Failure during DNS peer fetch.");
 		}
 		for (PeerAddress tPeer : dnsPeers) {
-			this.possiblyLearnPeer(tPeer, null, false, 0);
+			this.possiblyLearnPeer(new SanatizedRecord(tPeer), null);
 		}
 	}
 
@@ -153,15 +159,18 @@ public class Manager implements Runnable, AddressUser {
 		return initPeerAddresses;
 	}
 
-	public void logEvent(String eventMsg) {
-		this.runLog.writeOrDie(Manager.getTimestamp() + "," + eventMsg + "\n");
+	public void logEvent(String eventMsg, int logLevel) {
+		if (logLevel <= this.myLogLevel) {
+			this.runLog.writeOrDie(Manager.getTimestamp() + "," + eventMsg + "\n");
+		}
 	}
 
-	public void logException(String errMsg) {
-		this.exceptionLog.writeOrDie(Manager.getTimestamp() + "," + errMsg + "\n");
+	public void logException(Exception errMsg) {
+		this.exceptionLog.writeOrDie(
+				Manager.getTimestamp() + "," + errMsg.getMessage() + "," + errMsg.getStackTrace()[0].toString() + "\n");
 	}
 
-	public boolean possiblyLearnPeer(PeerAddress learnedPeer, PeerAddress learnedFrom, boolean unsolicitied, long ts) {
+	public boolean possiblyLearnPeer(SanatizedRecord learnedPeer, SanatizedRecord learnedFrom) {
 		boolean returnFlag = false;
 
 		/*
@@ -169,17 +178,16 @@ public class Manager implements Runnable, AddressUser {
 		 * with going into unsolicitied queue, but still ends up in harvested to
 		 * queue so not that big of a deal IMO
 		 */
-		String learnedAddrStr = learnedPeer.toString();
 		synchronized (this.records) {
-			if (!this.records.containsKey(learnedAddrStr)) {
+			if (!this.records.containsKey(learnedPeer)) {
 				PeerRecord newRecord = new PeerRecord(learnedPeer, this);
-				this.records.put(learnedAddrStr, newRecord);
+				this.records.put(learnedPeer, newRecord);
 				returnFlag = true;
-				this.connTester.giveNewNode(learnedPeer, ts, unsolicitied);
+				this.connTester.giveNewNode(learnedPeer);
 			}
 		}
 		if (learnedFrom != null) {
-			this.records.get(learnedAddrStr).addNodeWhoKnowsMe(learnedFrom, ts);
+			this.records.get(learnedPeer).addNodeWhoKnowsMe(learnedFrom, learnedPeer.getTS());
 		}
 
 		return returnFlag;
@@ -187,47 +195,57 @@ public class Manager implements Runnable, AddressUser {
 
 	public void resolvedStartedPeer(Peer thePeer) {
 		this.addrHarvester.giveNewHarvestTarget(thePeer, true);
-		this.peerObjs.put(thePeer.getAddress().toString(), thePeer);
+		this.peerObjs.put(new SanatizedRecord(thePeer.getAddress()), thePeer);
 	}
 
 	public void cleanupDeadPeer(Peer thePeer) {
-		this.addrHarvester.poisonPeer(thePeer.getAddress());
-		this.peerObjs.remove(thePeer.getAddress().toString());
-		// TODO ensure this gets called once per peer
-		// TODO give the PeerAddress back tot he conn tester for work
-	}
-	
-	public void getBurstResults(PeerAddress fromPeer, Set<PeerAddress> harvestedAddrs){
-		for(PeerAddress tLearned: harvestedAddrs){
-			this.handleAddressNotificiation(tLearned, this.peerObjs.get(fromPeer.toString()));
+		SanatizedRecord tRec = new SanatizedRecord(thePeer.getAddress());
+		if (this.peerObjs.remove(tRec) != null) {
+			this.addrHarvester.poisonPeer(thePeer.getAddress());
+			this.connTester.giveReconnectTarget(thePeer.getAddress());
 		}
 	}
-	
+
+	public void getBurstResults(SanatizedRecord fromPeer, HashSet<SanatizedRecord> responses) {
+		for (SanatizedRecord tLearned : responses) {
+			this.handleAddressNotificiation(tLearned, fromPeer);
+		}
+	}
+
 	@Override
 	public void getAddresses(AddressMessage arg0, Peer arg1) {
-		this.logEvent("Unsolicted  push of " + arg0.getAddresses().size() + " from " + arg1.getAddress());
+		this.logEvent("Unsolicted  push of " + arg0.getAddresses().size() + " from " + arg1.getAddress(),
+				Manager.DEBUG_LOG_LEVEL);
 		List<PeerAddress> harvestedAddrs = arg0.getAddresses();
+		boolean actuallyUnsolAddr = harvestedAddrs.size() < 3;
+		SanatizedRecord fromPeer = new SanatizedRecord(arg1.getAddress());
 		/*
 		 * This math should be correct, clockSkew is myNow - theirNow (i.e. the
 		 * number of seconds ahead I am)
 		 */
 		for (PeerAddress tAddr : harvestedAddrs) {
-			this.handleAddressNotificiation(tAddr, arg1);
+			SanatizedRecord incPeer = new SanatizedRecord(tAddr);
+			if (actuallyUnsolAddr) {
+				this.logEvent(
+						"ANNOUNCED," + incPeer.toString() + ",from," + fromPeer.toString() + "," + incPeer.getTS(),
+						Manager.CRIT_LOG_LEVEL);
+				this.connTester.givePriorityConnectTarget(tAddr);
+			}
+			this.handleAddressNotificiation(incPeer, fromPeer);
 		}
 	}
-	
-	private void handleAddressNotificiation(PeerAddress incAddr, Peer learnedFrom){
-		String tAddrStr = incAddr.toString();
-		long logonGuess = learnedFrom.convertTheirTimeToLocal(incAddr.getTime());
-		if (!this.records.containsKey(tAddrStr)) {
-			this.possiblyLearnPeer(incAddr, learnedFrom.getAddress(), true, logonGuess);
+
+	private void handleAddressNotificiation(SanatizedRecord incAddr, SanatizedRecord learnedFrom) {
+		if (!this.records.containsKey(incAddr)) {
+			this.possiblyLearnPeer(incAddr, learnedFrom);
 		} else {
-			this.records.get(tAddrStr).addNodeWhoKnowsMe(learnedFrom.getAddress(), logonGuess);
+			this.records.get(incAddr).addNodeWhoKnowsMe(learnedFrom, incAddr.getTS());
 		}
 	}
 
 	public PeerRecord getRecord(PeerAddress addr) {
-		return this.records.get(addr.toString());
+		SanatizedRecord tmpRec = new SanatizedRecord(addr);
+		return this.records.get(tmpRec);
 	}
 
 	public NioClientManager getRandomNIOClient() {
@@ -271,9 +289,9 @@ public class Manager implements Runnable, AddressUser {
 		try {
 			BufferedWriter outBuffer = new BufferedWriter(new FileWriter(file));
 			for (PeerRecord tRecord : this.records.values()) {
-				HashMap<String, Long> freshMap = tRecord.getCopyOfNodesWhoKnow();
+				HashMap<SanatizedRecord, Long> freshMap = tRecord.getCopyOfNodesWhoKnow();
 				outBuffer.write("***," + tRecord.getMyAddr().toString() + "\n");
-				for (String tKnowingPeer : freshMap.keySet()) {
+				for (SanatizedRecord tKnowingPeer : freshMap.keySet()) {
 					outBuffer.write(tKnowingPeer + "," + freshMap.get(tKnowingPeer) + "\n");
 				}
 			}
@@ -286,7 +304,7 @@ public class Manager implements Runnable, AddressUser {
 	public void dumpTimeSkew(String file) {
 		try {
 			BufferedWriter outBuffer = new BufferedWriter(new FileWriter(file));
-			for (String tAddr : this.peerObjs.keySet()) {
+			for (SanatizedRecord tAddr : this.peerObjs.keySet()) {
 				Peer tPeer = this.peerObjs.get(tAddr);
 				if (tPeer != null) {
 					outBuffer.write(tAddr + "," + tPeer.getClockSkewGuess() + "\n");
@@ -313,8 +331,8 @@ public class Manager implements Runnable, AddressUser {
 				sum += tCount;
 			}
 
-			this.logEvent("total known nodes " + this.records.size());
-			this.logEvent("active connections " + sum + "(" + Arrays.toString(counts) + ")");
+			this.logEvent("total known nodes " + this.records.size(), Manager.CRIT_LOG_LEVEL);
+			this.logEvent("active connections " + sum + "(" + Arrays.toString(counts) + ")", Manager.CRIT_LOG_LEVEL);
 			/*
 			 * Force the cleaning up of useless arrays every little bit
 			 */
@@ -328,7 +346,7 @@ public class Manager implements Runnable, AddressUser {
 		return Manager.LONG_DF.format(curDate);
 	}
 
-	public static void main(String[] args) throws IOException {
+	public static void main(String[] args) throws Exception {
 		Manager self = new Manager();
 		Thread selfThread = new Thread(self);
 		selfThread.start();
@@ -336,28 +354,33 @@ public class Manager implements Runnable, AddressUser {
 		// TODO set *this (main)* thread to daemon
 		Scanner inScanner = new Scanner(System.in);
 		while (true) {
-			String cmd = inScanner.next();
+			Thread.sleep(1800 * 1000);
+			// String cmd = inScanner.next();
 
-			if (cmd.equalsIgnoreCase("knowledge")) {
-				System.out.println("Enter file name");
-				String fileName = inScanner.next();
-				self.dumpKnowledge(fileName);
-			} else if (cmd.equalsIgnoreCase("sucesses")) {
-				System.out.println("Enter file name");
-				String fileName = inScanner.next();
-				self.dumpRespondingNodes(fileName);
-			} else if (cmd.equalsIgnoreCase("clock")) {
-				System.out.println("Enter file name");
-				String fileName = inScanner.next();
-				self.dumpTimeSkew(fileName);
-			} else if (cmd.equalsIgnoreCase("exit")) {
-				// TODO make this actually kill the program?
-				break;
-			} else {
-				System.out.println("Bad command.");
-			}
+			String tempTS = Long.toString((System.currentTimeMillis() / 1000));
+			self.dumpTimeSkew("skew-" + tempTS);
+			self.dumpKnowledge("know-" + tempTS);
+
+			// if (cmd.equalsIgnoreCase("knowledge")) {
+			// System.out.println("Enter file name");
+			// String fileName = inScanner.next();
+			// self.dumpKnowledge(fileName);
+			// } else if (cmd.equalsIgnoreCase("sucesses")) {
+			// System.out.println("Enter file name");
+			// String fileName = inScanner.next();
+			// self.dumpRespondingNodes(fileName);
+			// } else if (cmd.equalsIgnoreCase("clock")) {
+			// System.out.println("Enter file name");
+			// String fileName = inScanner.next();
+			// self.dumpTimeSkew(fileName);
+			// } else if (cmd.equalsIgnoreCase("exit")) {
+			// // TODO make this actually kill the program?
+			// break;
+			// } else {
+			// System.out.println("Bad command.");
+			// }
 			// TODO report when dump done
 		}
-		inScanner.close();
+		// inScanner.close();
 	}
 }

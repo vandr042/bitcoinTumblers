@@ -10,6 +10,7 @@ import org.bitcoinj.core.Peer;
 import org.bitcoinj.core.PeerAddress;
 
 import data.PeerTimePair;
+import data.SanatizedRecord;
 import listeners.BurstableHarvester;
 
 public class AddressHarvest implements Runnable {
@@ -24,9 +25,11 @@ public class AddressHarvest implements Runnable {
 
 	private ThreadPoolExecutor burstThreadPool;
 
+	// TODO clean this code
 	private static final long MIN_HARVEST_INTERVAL_SEC = 15;
+	private static final long NORMAL_RESTART_INTERVAL_SEC = 1800;
 
-	private static final boolean LOG_ADDR_TIMING = true;
+	private static final boolean LOG_ADDR_TIMING = false;
 
 	public AddressHarvest(Manager parent) {
 		this.myParent = parent;
@@ -43,16 +46,18 @@ public class AddressHarvest implements Runnable {
 		long ts = System.currentTimeMillis();
 		if (jitter) {
 			ts += this.rng.nextDouble() * AddressHarvest.MIN_HARVEST_INTERVAL_SEC * 1000;
-			this.myParent.logEvent("New harvest target " + newPeer.getAddress());
+			this.myParent.logEvent("New harvest target " + newPeer.getAddress(), Manager.DEBUG_LOG_LEVEL);
 		}
 		PeerTimePair tmpPair = new PeerTimePair(newPeer, ts);
 		this.toTestQueue.put(tmpPair);
 	}
 
-	public void poisonPeer(PeerAddress addr) {
+	public boolean poisonPeer(PeerAddress addr) {
+		boolean changed = false;
 		synchronized (this) {
-			this.blackListSet.add(addr.toString());
+			changed = this.blackListSet.add(addr.toString());
 		}
+		return changed;
 	}
 
 	public void startNewBurstHarvest(Peer targetPeer) {
@@ -66,7 +71,7 @@ public class AddressHarvest implements Runnable {
 
 		// TODO do we want a thread pool of some type for this work?
 		if (okToStart) {
-			this.myParent.logEvent("Addr burst harvest started for " + targetPeer.getAddress());
+			this.myParent.logEvent("Addr burst harvest started for " + targetPeer.getAddress(), Manager.DEBUG_LOG_LEVEL);
 			BurstableHarvester burstChild = new BurstableHarvester(targetPeer, this);
 			Thread burstThread = new Thread(burstChild);
 			burstThread.start();
@@ -87,7 +92,7 @@ public class AddressHarvest implements Runnable {
 		 * then push the harvest to the parent
 		 */
 		harv.getTarget().registerAddressConsumer(this.myParent);
-		this.myParent.getBurstResults(harv.getTarget().getAddress(), harv.getResponses());
+		this.myParent.getBurstResults(new SanatizedRecord(harv.getTarget().getAddress()), harv.getResponses());
 
 		/*
 		 * Log how long this took us
@@ -101,8 +106,13 @@ public class AddressHarvest implements Runnable {
 				logStrBuild.append(",");
 				logStrBuild.append(timeDeltas.get(counter).toString());
 			}
-			this.myParent.logEvent(logStrBuild.toString());
+			this.myParent.logEvent(logStrBuild.toString(), Manager.DEBUG_LOG_LEVEL);
 		}
+
+		//TODO we need to handle the restarting more intelligently, maybe?
+		PeerTimePair tmpPair = new PeerTimePair(harv.getTarget(),
+				System.currentTimeMillis() + AddressHarvest.NORMAL_RESTART_INTERVAL_SEC * 1000);
+		this.toTestQueue.put(tmpPair);
 	}
 
 	@Override
@@ -134,10 +144,9 @@ public class AddressHarvest implements Runnable {
 					Thread.sleep(AddressHarvest.MIN_HARVEST_INTERVAL_SEC * 1000 - timeSinceLastHarvest);
 				}
 
-				
 				this.startNewBurstHarvest(tmpPair.getPeer());
 			} catch (Exception e) {
-				this.myParent.logException(e.getLocalizedMessage());
+				this.myParent.logException(e);
 			}
 		}
 	}

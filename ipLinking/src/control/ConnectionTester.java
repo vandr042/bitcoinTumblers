@@ -19,6 +19,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import data.PeerRecord;
+import data.SanatizedRecord;
 import data.PeerAddressTimePair;
 import listeners.ConnTestSlave;
 import listeners.DeadPeerListener;
@@ -43,10 +44,10 @@ public class ConnectionTester implements Runnable {
 	private PriorityBlockingQueue<PeerAddressTimePair> disconnectedPeers;
 	private PriorityBlockingQueue<PeerAddressTimePair> retryPeers;
 
-	private static final int MAX_PEERS_TO_TEST = 5000;
-	private static final long RETEST_TRY_SEC = 3600;
+	private static final int MAX_PEERS_TO_TEST = 3000;
+	private static final long RETEST_TRY_SEC = 1800;
 	private static final long NO_VERSION_RETEST_TRY_SEC = 900;
-	private static final long RECONNECT_TRY_SEC = 30;
+	private static final long RECONNECT_TRY_SEC = 300;
 
 	private static final long VERSION_TIMEOUT_SEC = 10;
 
@@ -73,16 +74,13 @@ public class ConnectionTester implements Runnable {
 		this.versionTimeoutPool = new ScheduledThreadPoolExecutor(1);
 	}
 
-	public void giveNewNode(PeerAddress addr, long ts, boolean unsolicited) {
+	// TODO work with sanatized record more intelligently
+	public void giveNewNode(SanatizedRecord addr) {
 		/*
 		 * TODO check that these queues remain "sane" in size
 		 */
-		PeerAddressTimePair tmpPair = new PeerAddressTimePair(addr, ts);
-		if (unsolicited) {
-			this.unsolicitedPeers.offer(tmpPair);
-		} else {
-			this.harvestedPeers.offer(tmpPair);
-		}
+		PeerAddressTimePair tmpPair = new PeerAddressTimePair(addr.getPeerAddressObject(), addr.getTS() * -1);
+		this.harvestedPeers.offer(tmpPair);
 
 		this.eventQueue.add(ConnectionEvent.AVAILNEW);
 	}
@@ -91,6 +89,10 @@ public class ConnectionTester implements Runnable {
 		this.disconnectedPeers.offer(
 				new PeerAddressTimePair(addr, System.currentTimeMillis() + ConnectionTester.RECONNECT_TRY_SEC * 1000));
 		this.eventQueue.add(ConnectionEvent.AVAILOLD);
+	}
+	
+	public void givePriorityConnectTarget(PeerAddress add){
+		//FIXME implement me!!!
 	}
 
 	public void run() {
@@ -162,7 +164,7 @@ public class ConnectionTester implements Runnable {
 				this.drainQueue(this.retryPeers);
 
 			} catch (Exception e) {
-				this.myParent.logException(e.getLocalizedMessage());
+				this.myParent.logException(e);
 			}
 		}
 
@@ -190,9 +192,9 @@ public class ConnectionTester implements Runnable {
 				shortestTime = this.retryPeers.peek().getTime();
 			}
 		}
-		if (!this.retryPeers.isEmpty()) {
-			if (this.retryPeers.peek().getTime() < shortestTime) {
-				shortestTime = this.retryPeers.peek().getTime();
+		if (!this.disconnectedPeers.isEmpty()) {
+			if (this.disconnectedPeers.peek().getTime() < shortestTime) {
+				shortestTime = this.disconnectedPeers.peek().getTime();
 			}
 		}
 
@@ -204,8 +206,16 @@ public class ConnectionTester implements Runnable {
 	}
 
 	private boolean startTest(PeerAddress toTest) {
-		PeerRecord tRecord = this.myParent.getRecord(toTest);
-		if (System.currentTimeMillis() - tRecord.getTimeConnFailed() < ConnectionTester.RETEST_TRY_SEC) {
+		PeerRecord tRecord = null;
+		while (tRecord == null) {
+			tRecord = this.myParent.getRecord(toTest);
+		}
+
+		// TODO we "lose" the once connected status if we retry the connection
+		// and the second connection attempt fails, but we don't from the record...
+
+		if (tRecord.getTimeConnFailed() != -1 && (System.currentTimeMillis()
+				- tRecord.getTimeConnFailed()) < (ConnectionTester.RETEST_TRY_SEC * 1000)) {
 			return false;
 		}
 
@@ -232,7 +242,7 @@ public class ConnectionTester implements Runnable {
 
 	public void logSummary() {
 		synchronized (this.pendingTests) {
-			this.myParent.logEvent("conn tests pending: " + this.pendingTests.size());
+			this.myParent.logEvent("conn tests pending: " + this.pendingTests.size(), Manager.DEBUG_LOG_LEVEL);
 		}
 	}
 
@@ -244,7 +254,8 @@ public class ConnectionTester implements Runnable {
 		this.myParent.getRecord(failedPeer.getAddress()).signalConnectionFailed();
 		this.retryPeers.add(new PeerAddressTimePair(failedPeer.getAddress(),
 				System.currentTimeMillis() + ConnectionTester.RETEST_TRY_SEC * 1000));
-		this.myParent.logEvent("tcpfailed " + failedPeer.getAddress().toString() + " - " + reason);
+		this.myParent.logEvent("tcpfailed " + failedPeer.getAddress().toString() + " - " + reason,
+				Manager.DEBUG_LOG_LEVEL);
 
 		/*
 		 * We have a new retest option AND an open test slot, pair of events
@@ -255,7 +266,7 @@ public class ConnectionTester implements Runnable {
 	}
 
 	public void reportTCPSuccess(Peer connPeer) {
-		this.myParent.logEvent("tcpconn " + connPeer.getAddress().toString());
+		this.myParent.logEvent("tcpstart " + connPeer.getAddress().toString(), Manager.DEBUG_LOG_LEVEL);
 		VersionTestSlave nextSlave = new VersionTestSlave(this, connPeer);
 		ListenableFuture<Peer> verHandshakeFuture = connPeer.getVersionHandshakeFuture();
 		ListenableFuture<Peer> timeOutFuture = Futures.withTimeout(verHandshakeFuture,
@@ -275,7 +286,8 @@ public class ConnectionTester implements Runnable {
 		this.myParent.getRecord(failedPeer.getAddress()).signalConnectionFailed();
 		this.retryPeers.add(new PeerAddressTimePair(failedPeer.getAddress(),
 				System.currentTimeMillis() + ConnectionTester.NO_VERSION_RETEST_TRY_SEC * 1000));
-		this.myParent.logEvent("versionfailed " + failedPeer.getAddress().toString() + " - " + reason);
+		this.myParent.logEvent("versionfailed " + failedPeer.getAddress().toString() + " - " + reason,
+				Manager.DEBUG_LOG_LEVEL);
 
 		/*
 		 * We have a new retest option AND an open test slot, pair of events
@@ -294,7 +306,7 @@ public class ConnectionTester implements Runnable {
 
 		this.myParent.resolvedStartedPeer(workingPeer);
 
-		this.myParent.logEvent("worked " + workingPeer.getAddress().toString());
+		this.myParent.logEvent("conn," + workingPeer.getAddress().toString(), Manager.CRIT_LOG_LEVEL);
 		this.eventQueue.add(ConnectionEvent.AVAILTEST);
 	}
 }

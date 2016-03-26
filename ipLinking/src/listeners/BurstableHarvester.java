@@ -9,6 +9,7 @@ import org.bitcoinj.core.Peer;
 import org.bitcoinj.core.PeerAddress;
 
 import control.AddressHarvest;
+import data.SanatizedRecord;
 
 public class BurstableHarvester implements Runnable, AddressUser {
 
@@ -20,10 +21,10 @@ public class BurstableHarvester implements Runnable, AddressUser {
 	private int roundGoal;
 	private int roundDone;
 
-	private Set<PeerAddress> responseSet;
+	private HashSet<SanatizedRecord> responses;
 	private List<Long> delays;
 
-	private static final int MAX_ROUNDS = 20;
+	private static final int MAX_ROUNDS = 30;
 
 	public BurstableHarvester(Peer target, AddressHarvest parent) {
 		this.myTarget = target;
@@ -34,7 +35,7 @@ public class BurstableHarvester implements Runnable, AddressUser {
 		this.roundGoal = BurstableHarvester.MAX_ROUNDS;
 		this.roundDone = 0;
 
-		this.responseSet = new HashSet<PeerAddress>();
+		this.responses = new HashSet<SanatizedRecord>();
 		this.delays = new ArrayList<Long>();
 	}
 
@@ -46,10 +47,10 @@ public class BurstableHarvester implements Runnable, AddressUser {
 		try {
 			while (!this.reachedGoal()) {
 				this.roundDone++;
-				long startTime = System.currentTimeMillis() / 1000;
+				long startTime = System.currentTimeMillis();
 				this.myTarget.getAddr();
 				this.advance.acquire();
-				long endTime = System.currentTimeMillis() / 1000;
+				long endTime = System.currentTimeMillis();
 				this.delays.add(endTime - startTime);
 			}
 		} catch (InterruptedException e) {
@@ -67,7 +68,11 @@ public class BurstableHarvester implements Runnable, AddressUser {
 	@Override
 	public void getAddresses(AddressMessage m, Peer myPeer) {
 		synchronized (this) {
-			this.responseSet.addAll(m.getAddresses());
+			for(PeerAddress tAddr: m.getAddresses()){
+				//TODO how do we actually want to handle updated time stamps?
+				SanatizedRecord tRec = new SanatizedRecord(tAddr);
+				this.responses.add(tRec);
+			}
 			this.advance.release();
 		}
 	}
@@ -76,8 +81,8 @@ public class BurstableHarvester implements Runnable, AddressUser {
 		return this.myTarget;
 	}
 
-	public Set<PeerAddress> getResponses() {
-		return this.responseSet;
+	public HashSet<SanatizedRecord> getResponses() {
+		return this.responses;
 	}
 
 	public List<Long> getInterMsgIntervals() {

@@ -2,28 +2,26 @@ package data;
 
 import java.util.HashMap;
 
-import org.bitcoinj.core.PeerAddress;
-
 import control.Manager;
 
 public class PeerRecord {
 
-	private PeerAddress myAddr;
+	private SanatizedRecord myAddr;
 	private long timeConnected;
 	private long timeDisconnected;
 	private long timeConnFailed;
 	private long lastUptime;
-	private HashMap<String, Long> peersWhoKnowMe;
+	private HashMap<SanatizedRecord, Long> peersWhoKnowMe;
 
 	private Manager myParent;
 
-	public PeerRecord(PeerAddress addr, Manager parent) {
+	public PeerRecord(SanatizedRecord addr, Manager parent) {
 		this.myAddr = addr;
 		this.timeConnected = -1;
 		this.timeDisconnected = -1;
 		this.timeConnFailed = -1;
 		this.lastUptime = 0;
-		this.peersWhoKnowMe = new HashMap<String, Long>();
+		this.peersWhoKnowMe = new HashMap<SanatizedRecord, Long>();
 		this.myParent = parent;
 	}
 
@@ -32,7 +30,7 @@ public class PeerRecord {
 			return false;
 		}
 
-		return this.myAddr.toString().equals(((PeerRecord) rhs).myAddr.toString());
+		return this.myAddr.equals(((PeerRecord) rhs).myAddr);
 	}
 
 	public void signalConnected() {
@@ -85,21 +83,20 @@ public class PeerRecord {
 		return retFlag;
 	}
 
-	public boolean addNodeWhoKnowsMe(PeerAddress nodeWhoKnows, Long ts) {
+	public boolean addNodeWhoKnowsMe(SanatizedRecord nodeWhoKnows, Long ts) {
 		boolean retFlag = false;
-		String addrWhoKnowsStr = nodeWhoKnows.toString();
 		synchronized (this.peersWhoKnowMe) {
-			retFlag = this.peersWhoKnowMe.containsKey(addrWhoKnowsStr);
-			if (retFlag && this.peersWhoKnowMe.get(addrWhoKnowsStr) != ts) {
-				this.myParent.logEvent("TS update for " + this.myAddr.toString() + " from " + addrWhoKnowsStr
-						+ "(" + this.peersWhoKnowMe.get(addrWhoKnowsStr) + "," + ts + ")");
+			retFlag = this.peersWhoKnowMe.containsKey(nodeWhoKnows);
+			if (retFlag && (!this.peersWhoKnowMe.get(nodeWhoKnows).equals(ts))) {
+				this.myParent.logEvent("TS update for " + this.myAddr.toString() + " from " + nodeWhoKnows.toString()
+						+ "(" + this.peersWhoKnowMe.get(nodeWhoKnows) + "," + ts + ")", Manager.CRIT_LOG_LEVEL);
 			}
-			this.peersWhoKnowMe.put(addrWhoKnowsStr, ts);
+			this.peersWhoKnowMe.put(nodeWhoKnows, ts);
 		}
 		return retFlag;
 	}
 
-	public PeerAddress getMyAddr() {
+	public SanatizedRecord getMyAddr() {
 		return myAddr;
 	}
 
@@ -123,11 +120,11 @@ public class PeerRecord {
 		return timeConnFailed;
 	}
 
-	public HashMap<String, Long> getCopyOfNodesWhoKnow() {
-		HashMap<String, Long> cloneMap = new HashMap<String, Long>();
+	public HashMap<SanatizedRecord, Long> getCopyOfNodesWhoKnow() {
+		HashMap<SanatizedRecord, Long> cloneMap = new HashMap<SanatizedRecord, Long>();
 
 		synchronized (this.peersWhoKnowMe) {
-			for (String tAddr : this.peersWhoKnowMe.keySet()) {
+			for (SanatizedRecord tAddr : this.peersWhoKnowMe.keySet()) {
 				cloneMap.put(tAddr, this.peersWhoKnowMe.get(tAddr));
 			}
 		}

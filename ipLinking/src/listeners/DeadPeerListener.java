@@ -25,7 +25,7 @@ public class DeadPeerListener implements PeerConnectionEventListener {
 	public void onPeerDisconnected(Peer dcPeer, int arg1) {
 		this.myParent.getRecord(dcPeer.getAddress()).signalDisconnected();
 		this.myParent.cleanupDeadPeer(dcPeer);
-		this.myParent.logEvent("D/C peer " + dcPeer.getAddress());
+		this.myParent.logEvent("D/C peer " + dcPeer.getAddress(), Manager.CRIT_LOG_LEVEL);
 	}
 
 	@Override
