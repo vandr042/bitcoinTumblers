@@ -1,20 +1,14 @@
 package control;
 
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Random;
-import java.util.Scanner;
-import java.util.HashSet;
+import java.util.*;
+import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 
 import org.bitcoinj.core.AddressMessage;
 import org.bitcoinj.core.AddressUser;
@@ -26,6 +20,12 @@ import org.bitcoinj.net.NioClientManager;
 import org.bitcoinj.net.discovery.DnsDiscovery;
 import org.bitcoinj.net.discovery.PeerDiscoveryException;
 import org.bitcoinj.params.MainNetParams;
+
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.impl.Arguments;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.Namespace;
 
 import data.PeerRecord;
 import data.SanatizedRecord;
@@ -50,6 +50,8 @@ public class Manager implements Runnable, AddressUser {
 
 	public static Random insecureRandom = new Random();
 
+	private static final String RECOVER_DIR = "recovery/";
+
 	private static final DateFormat LONG_DF = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 	private static final long STATUSREPORT_INTERVAL_SEC = 120;
 
@@ -59,7 +61,7 @@ public class Manager implements Runnable, AddressUser {
 	public static final int CRIT_LOG_LEVEL = 2;
 	public static final int DEBUG_LOG_LEVEL = 3;
 
-	public Manager() throws IOException {
+	public Manager(Set<String> recoverySet) throws IOException {
 		/*
 		 * Build the params and context objects which are needed by other data
 		 * structures.
@@ -126,13 +128,29 @@ public class Manager implements Runnable, AddressUser {
 		/*
 		 * Learn peers from the DNS Discovery system of bitcoin
 		 */
-		this.logEvent("DNS bootstrap start", Manager.EMERGENCY_LOG_LEVEL);
-		PeerAddress[] dnsPeers = this.buildDNSBootstrap();
-		this.logEvent("DNS boostrap done", Manager.EMERGENCY_LOG_LEVEL);
-		if (dnsPeers == null) {
-			throw new RuntimeException("Failure during DNS peer fetch.");
+		PeerAddress[] startingList = null;
+		if (recoverySet == null) {
+			this.logEvent("DNS bootstrap start", Manager.EMERGENCY_LOG_LEVEL);
+			PeerAddress[] dnsPeers = this.buildDNSBootstrap();
+			this.logEvent("DNS boostrap done", Manager.EMERGENCY_LOG_LEVEL);
+			if (dnsPeers == null) {
+				throw new RuntimeException("Failure during DNS peer fetch.");
+			}
+			startingList = dnsPeers;
+		} else {
+			startingList = new PeerAddress[recoverySet.size()];
+			int pos = 0;
+			for (String tStr : recoverySet) {
+				String[] tokens = tStr.split(":");
+				startingList[pos] = new PeerAddress(InetAddress.getByName(tokens[0].split("/")[1]), Integer.parseInt(tokens[1]));
+				pos++;
+			}
 		}
-		for (PeerAddress tPeer : dnsPeers) {
+
+		/*
+		 * Actually boot off of our starting list
+		 */
+		for (PeerAddress tPeer : startingList) {
 			this.possiblyLearnPeer(new SanatizedRecord(tPeer), null);
 		}
 	}
@@ -316,6 +334,40 @@ public class Manager implements Runnable, AddressUser {
 		}
 	}
 
+	public void makeRecoveryFile(String file) {
+		File baseDir = new File(Manager.RECOVER_DIR);
+
+		/*
+		 * Sanity check that the enviornment has the recovery directory
+		 */
+		if (!baseDir.exists()) {
+			baseDir.mkdirs();
+		}
+
+		/*
+		 * Actually dump our current connection state
+		 */
+		File currentRecFile = new File(baseDir, file + "-recovery");
+		try {
+			BufferedWriter outBuff = new BufferedWriter(new FileWriter(currentRecFile));
+			for (SanatizedRecord tRec : this.peerObjs.keySet()) {
+				outBuff.write(tRec.toString() + "\n");
+			}
+			outBuff.close();
+		} catch (IOException e) {
+			this.logException(e);
+		}
+
+		/*
+		 * Delete all others
+		 */
+		for (File tFile : baseDir.listFiles()) {
+			if (!tFile.equals(currentRecFile)) {
+				tFile.delete();
+			}
+		}
+	}
+
 	@Override
 	public void run() {
 
@@ -346,41 +398,66 @@ public class Manager implements Runnable, AddressUser {
 		return Manager.LONG_DF.format(curDate);
 	}
 
+	public static Set<String> buildRecoverySet() throws IOException {
+		File baseDir = new File(Manager.RECOVER_DIR);
+		Set<String> recoverySet = new HashSet<String>();
+		for (File tFile : baseDir.listFiles()) {
+			if (!tFile.getName().contains("-recovery")) {
+				continue;
+			}
+			BufferedReader inBuffer = new BufferedReader(new FileReader(tFile));
+			while (inBuffer.ready()) {
+				String pollStr = inBuffer.readLine().trim();
+				if (pollStr.contains(":")) {
+					recoverySet.add(pollStr);
+				}
+			}
+			inBuffer.close();
+		}
+		return recoverySet;
+	}
+
 	public static void main(String[] args) throws Exception {
-		Manager self = new Manager();
+		ArgumentParser argParse = ArgumentParsers.newArgumentParser("Manager");
+		argParse.addArgument("--recovery").help("Triggers recover mode start").required(false)
+				.action(Arguments.storeTrue());
+		/*
+		 * Actually parse
+		 */
+		Namespace ns = null;
+		try {
+			ns = argParse.parseArgs(args);
+		} catch (ArgumentParserException e1) {
+			argParse.handleError(e1);
+			System.exit(-1);
+		}
+
+		Manager self = null;
+		if (ns.getBoolean("recovery")) {
+			Set<String> recoveryPeerSet = Manager.buildRecoverySet();
+			self = new Manager(recoveryPeerSet);
+		} else {
+			self = new Manager(null);
+		}
+
 		Thread selfThread = new Thread(self);
 		selfThread.start();
 
-		// TODO set *this (main)* thread to daemon
-		Scanner inScanner = new Scanner(System.in);
+		long nextLargeLog = System.currentTimeMillis() + 1800 * 1000;
 		while (true) {
-			Thread.sleep(1800 * 1000);
-			// String cmd = inScanner.next();
+			Thread.sleep(120 * 1000);
+			//Thread.sleep(600 * 1000);
 
 			String tempTS = Long.toString((System.currentTimeMillis() / 1000));
-			self.dumpTimeSkew("skew-" + tempTS);
-			self.dumpKnowledge("know-" + tempTS);
 
-			// if (cmd.equalsIgnoreCase("knowledge")) {
-			// System.out.println("Enter file name");
-			// String fileName = inScanner.next();
-			// self.dumpKnowledge(fileName);
-			// } else if (cmd.equalsIgnoreCase("sucesses")) {
-			// System.out.println("Enter file name");
-			// String fileName = inScanner.next();
-			// self.dumpRespondingNodes(fileName);
-			// } else if (cmd.equalsIgnoreCase("clock")) {
-			// System.out.println("Enter file name");
-			// String fileName = inScanner.next();
-			// self.dumpTimeSkew(fileName);
-			// } else if (cmd.equalsIgnoreCase("exit")) {
-			// // TODO make this actually kill the program?
-			// break;
-			// } else {
-			// System.out.println("Bad command.");
-			// }
-			// TODO report when dump done
+			self.makeRecoveryFile(tempTS);
+
+			if (System.currentTimeMillis() > nextLargeLog) {
+				nextLargeLog = System.currentTimeMillis() + 1800 * 1000;
+				self.dumpTimeSkew("skew-" + tempTS);
+				self.dumpKnowledge("know-" + tempTS);
+			}
+
 		}
-		// inScanner.close();
 	}
 }
