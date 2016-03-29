@@ -3,23 +3,43 @@
 import sys
 import random
 
+OUT_FILE_BASE = "realDelay"
+DELAY_FILE = "delays-10.txt"
+
+NUMBER_PUBLIC_PEERS = 4000
+NUMBER_PRIVATE_PEERS = 10000
+
+MIN_PEERS_KNOWN = 4
+MAX_PEERS_KNOWN = 7
+MAX_PEERS = 7
+
 def main():
-    fullNodeList = list(genIPSet(14000))
-    pubList = fullNodeList[0:4000]
-    privList = fullNodeList[4000:]
+    fullNodeList = list(genIPSet(NUMBER_PUBLIC_PEERS + NUMBER_PRIVATE_PEERS))
+    pubList = fullNodeList[0:NUMBER_PUBLIC_PEERS]
+    privList = fullNodeList[NUMBER_PUBLIC_PEERS:]
     privConnMap = genGroundTruth(pubList, privList)
     pubConnMap = buildPubConn(privConnMap)
-    runSim(pubList, privList, privConnMap, pubConnMap)
+    delayModel = buildDelayModel()
+    runSim(pubList, privList, privConnMap, pubConnMap, delayModel)
 
-def runSim(pubList, privList, privConnMap, pubConnMap):
-    outFP = open("peer-finder-synth-out.log", "w")
-    truthFP = open("peer-finder-synth-groundTruth.log", "w")
+def buildDelayModel():
+    delays = []
+    inFP = open(DELAY_FILE)
+    for line in inFP:
+        if len(line.strip()) > 0:
+            delays.append(int(line))
+    inFP.close()
+    return delays
+    
+def runSim(pubList, privList, privConnMap, pubConnMap, delayModel):
+    outFP = open(OUT_FILE_BASE + "-peer-finder-synth-out.log", "w")
+    truthFP = open(OUT_FILE_BASE + "-peer-finder-synth-groundTruth.log", "w")
     currentTime = 0
     for tPub in pubList:
         outFP.write("conn," + tPub + "," + str(currentTime) + "\n")
         currentTime = currentTime + random.randint(5, 2000)
     for tPriv in privList:
-        detectCount = random.randint(4, 7)
+        detectCount = random.randint(MIN_PEERS_KNOWN, MAX_PEERS_KNOWN)
         tList = list(privConnMap[tPriv])
         for i in range(detectCount):
             outFP.write("remoteconn," + tPriv + "," + tList[i] + "," + str(currentTime) + "\n")
@@ -29,23 +49,23 @@ def runSim(pubList, privList, privConnMap, pubConnMap):
         sendingPeer = privList[random.randint(0, len(privList) - 1)]
         txID = str(random.getrandbits(32))
         truthFP.write(sendingPeer + "," + txID + "," + str(currentTime) + "\n")
-        currentTime = doTx(sendingPeer, privConnMap, pubConnMap, outFP, currentTime, txID)
+        currentTime = doTx(sendingPeer, privConnMap, pubConnMap, outFP, currentTime, txID, delayModel)
     truthFP.close()
     outFP.close()
         
 
-def doTx(sendingNode, privConn, pubConn, fp, time, txID):
+def doTx(sendingNode, privConn, pubConn, fp, time, txID, delayModel):
     eventMap = {}
     for tPeer in privConn[sendingNode]:
-        baseTime = time + random.randint(2,10)
+        baseTime = time + genTxDelay(delayModel)
         if tPeer in eventMap:
             eventMap[tPeer] = min(baseTime, eventMap[tPeer])
         else:
             eventMap[tPeer] = baseTime
         for tPrivPeer in pubConn[tPeer]:
-            nextTime = baseTime + random.randint(2, 10)
+            nextTime = baseTime + genTxDelay(delayModel)
             for tPubPeer in privConn[tPrivPeer]:
-                nextNextTime = nextTime + random.randint(2,10)
+                nextNextTime = nextTime + genTxDelay(delayModel)
                 if tPubPeer in eventMap:
                     eventMap[tPubPeer] = min(nextNextTime, eventMap[tPubPeer])
                 else:
@@ -66,10 +86,12 @@ def doTx(sendingNode, privConn, pubConn, fp, time, txID):
         lastTime = smallestTime
     return lastTime
     
-        
+
+def genTxDelay(delayModel):
+    return random.choice(delayModel)
             
         
-    
+
     
 def buildPubConn(privConMap):
     retMap = {}
@@ -86,8 +108,8 @@ def genGroundTruth(publicNodes, privateNodes):
     totalPubNodes = len(randomPubNodeList)
     for tNode in privateNodes:
         peerSet = set([])
-        while len(peerSet) < 7:
-            peerSet.add(randomPubNodeList[random.randint(0, totalPubNodes - 1)])
+        while len(peerSet) < MAX_PEERS:
+            peerSet.add(random.choice(randomPubNodeList))
         retMap[tNode] = peerSet
     return retMap
     
