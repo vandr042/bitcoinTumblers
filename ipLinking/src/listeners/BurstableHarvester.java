@@ -88,5 +88,13 @@ public class BurstableHarvester implements Runnable, AddressUser {
 	public List<Long> getInterMsgIntervals() {
 		return this.delays;
 	}
+	
+	public Long getTotalTime(){
+		long sum = 0;
+		for(Long tDelay: this.delays){
+			sum += tDelay;
+		}
+		return sum;
+	}
 
 }

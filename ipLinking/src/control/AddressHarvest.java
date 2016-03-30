@@ -71,7 +71,8 @@ public class AddressHarvest implements Runnable {
 
 		// TODO do we want a thread pool of some type for this work?
 		if (okToStart) {
-			this.myParent.logEvent("Addr burst harvest started for " + targetPeer.getAddress(), Manager.DEBUG_LOG_LEVEL);
+			this.myParent.logEvent("Addr burst harvest started for " + targetPeer.getAddress(),
+					Manager.DEBUG_LOG_LEVEL);
 			BurstableHarvester burstChild = new BurstableHarvester(targetPeer, this);
 			Thread burstThread = new Thread(burstChild);
 			burstThread.start();
@@ -108,8 +109,10 @@ public class AddressHarvest implements Runnable {
 			}
 			this.myParent.logEvent(logStrBuild.toString(), Manager.DEBUG_LOG_LEVEL);
 		}
+		this.myParent.logEvent("Address harvest finished for " + harv.getTarget().getAddress().toString() + " in "
+				+ harv.getTotalTime(), Manager.DEBUG_LOG_LEVEL);
 
-		//TODO we need to handle the restarting more intelligently, maybe?
+		// TODO we need to handle the restarting more intelligently, maybe?
 		PeerTimePair tmpPair = new PeerTimePair(harv.getTarget(),
 				System.currentTimeMillis() + AddressHarvest.NORMAL_RESTART_INTERVAL_SEC * 1000);
 		this.toTestQueue.put(tmpPair);
