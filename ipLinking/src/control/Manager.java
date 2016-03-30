@@ -20,6 +20,7 @@ import org.bitcoinj.net.NioClientManager;
 import org.bitcoinj.net.discovery.DnsDiscovery;
 import org.bitcoinj.net.discovery.PeerDiscoveryException;
 import org.bitcoinj.params.MainNetParams;
+import org.bitcoinj.utils.BriefLogFormatter;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.impl.Arguments;
@@ -71,6 +72,7 @@ public class Manager implements Runnable, AddressUser {
 		 * Build the params and context objects which are needed by other data
 		 * structures.
 		 */
+        BriefLogFormatter.init();
 		this.params = MainNetParams.get();
 		this.bcjContext = new Context(params);
 		Peer.lobotomizeMe();
