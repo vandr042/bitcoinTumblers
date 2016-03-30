@@ -14,7 +14,10 @@ JAR_STR = JARPATH + "/commonsLogging.jar:" + JARPATH + "/mjsBCJ.jar:" + JARPATH 
 
 def main():
     compile()
-    runProc = run(False)
+    if os.listdir("recovery"):
+        runProc = run(True)
+    else:
+        runProc = run(False)
     while True:
         runProc.wait()
         print("PROCESS FAILED")
