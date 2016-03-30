@@ -133,7 +133,7 @@ public class Manager implements Runnable, AddressUser {
 		/*
 		 * Learn peers from the DNS Discovery system of bitcoin
 		 */
-		PeerAddress[] startingList = null;
+		List<PeerAddress> startingList = null;
 		if (recoverySet == null) {
 			this.logEvent("DNS bootstrap start", Manager.EMERGENCY_LOG_LEVEL);
 			PeerAddress[] dnsPeers = this.buildDNSBootstrap();
@@ -141,15 +141,17 @@ public class Manager implements Runnable, AddressUser {
 			if (dnsPeers == null) {
 				throw new RuntimeException("Failure during DNS peer fetch.");
 			}
-			startingList = dnsPeers;
+			startingList = Arrays.asList(dnsPeers);
 		} else {
-			startingList = new PeerAddress[recoverySet.size()];
-			int pos = 0;
+			startingList = new LinkedList<PeerAddress>();
 			for (String tStr : recoverySet) {
 				String[] tokens = tStr.split(":");
-				startingList[pos] = new PeerAddress(InetAddress.getByName(tokens[0].split("/")[1]),
-						Integer.parseInt(tokens[1]));
-				pos++;
+				try {
+					startingList.add(new PeerAddress(InetAddress.getByName(tokens[0].split("/")[1]),
+							Integer.parseInt(tokens[1])));
+				} catch (Exception e) {
+					this.logException(e);
+				}
 			}
 		}
 
@@ -233,7 +235,7 @@ public class Manager implements Runnable, AddressUser {
 	public void getBurstResults(SanatizedRecord fromPeer, HashSet<SanatizedRecord> responses) {
 		for (SanatizedRecord tLearned : responses) {
 			this.handleAddressNotificiation(tLearned, fromPeer);
-			if ((System.currentTimeMillis()/1000) - tLearned.getTS() < Manager.INT_WINDOW_SEC) {
+			if ((System.currentTimeMillis() / 1000) - tLearned.getTS() < Manager.INT_WINDOW_SEC) {
 				this.logEvent("Poss Connect Point," + fromPeer.toString() + "," + tLearned.toString() + ","
 						+ tLearned.getTS(), Manager.CRIT_LOG_LEVEL);
 			}
