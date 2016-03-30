@@ -52,7 +52,7 @@ public class ConnectionTester implements Runnable {
 	private static final long VERSION_TIMEOUT_SEC = 10;
 
 	private enum ConnectionEvent {
-		AVAILNEW, AVAILOLD, AVAILTEST, TIMER;
+		AVAILNEW, UPDATETIMER, AVAILTEST, TIMER;
 	}
 
 	public ConnectionTester(Manager parent) {
@@ -88,11 +88,13 @@ public class ConnectionTester implements Runnable {
 	public void giveReconnectTarget(PeerAddress addr) {
 		this.disconnectedPeers.offer(
 				new PeerAddressTimePair(addr, System.currentTimeMillis() + ConnectionTester.RECONNECT_TRY_SEC * 1000));
-		this.eventQueue.add(ConnectionEvent.AVAILOLD);
+		this.eventQueue.add(ConnectionEvent.UPDATETIMER);
 	}
-	
-	public void givePriorityConnectTarget(PeerAddress add){
-		//FIXME implement me!!!
+
+	public void givePriorityConnectTarget(SanatizedRecord addr) {
+		PeerAddressTimePair tmpPair = new PeerAddressTimePair(addr.getPeerAddressObject(), addr.getTS() * -1);
+		this.unsolicitedPeers.offer(tmpPair);
+		this.eventQueue.add(ConnectionEvent.AVAILNEW);
 	}
 
 	public void run() {
@@ -211,11 +213,8 @@ public class ConnectionTester implements Runnable {
 			tRecord = this.myParent.getRecord(toTest);
 		}
 
-		// TODO we "lose" the once connected status if we retry the connection
-		// and the second connection attempt fails, but we don't from the record...
-
-		if (tRecord.getTimeConnFailed() != -1 && (System.currentTimeMillis()
-				- tRecord.getTimeConnFailed()) < (ConnectionTester.RETEST_TRY_SEC * 1000)) {
+		long lastFail = tRecord.getTimeConnFailed();
+		if (lastFail != -1 && (System.currentTimeMillis() - lastFail) < (ConnectionTester.RETEST_TRY_SEC * 1000)) {
 			return false;
 		}
 
@@ -251,9 +250,16 @@ public class ConnectionTester implements Runnable {
 		/*
 		 * Record the failure time and remove pending test
 		 */
-		this.myParent.getRecord(failedPeer.getAddress()).signalConnectionFailed();
-		this.retryPeers.add(new PeerAddressTimePair(failedPeer.getAddress(),
-				System.currentTimeMillis() + ConnectionTester.RETEST_TRY_SEC * 1000));
+		PeerRecord theRec = this.myParent.getRecord(failedPeer.getAddress());
+		theRec.signalConnectionFailed();
+		long delay = -1;
+		if (theRec.isOrHasEverConnected()) {
+			delay = ConnectionTester.RECONNECT_TRY_SEC;
+		} else {
+			delay = ConnectionTester.RETEST_TRY_SEC;
+		}
+		this.retryPeers
+				.add(new PeerAddressTimePair(failedPeer.getAddress(), System.currentTimeMillis() + delay * 1000));
 		this.myParent.logEvent("tcpfailed " + failedPeer.getAddress().toString() + " - " + reason,
 				Manager.DEBUG_LOG_LEVEL);
 
@@ -261,7 +267,7 @@ public class ConnectionTester implements Runnable {
 		 * We have a new retest option AND an open test slot, pair of events
 		 * gogo
 		 */
-		this.eventQueue.add(ConnectionEvent.AVAILOLD);
+		this.eventQueue.add(ConnectionEvent.UPDATETIMER);
 		this.eventQueue.add(ConnectionEvent.AVAILTEST);
 	}
 
@@ -283,9 +289,16 @@ public class ConnectionTester implements Runnable {
 		/*
 		 * Record the failure time and remove pending test
 		 */
-		this.myParent.getRecord(failedPeer.getAddress()).signalConnectionFailed();
-		this.retryPeers.add(new PeerAddressTimePair(failedPeer.getAddress(),
-				System.currentTimeMillis() + ConnectionTester.NO_VERSION_RETEST_TRY_SEC * 1000));
+		PeerRecord tRec = this.myParent.getRecord(failedPeer.getAddress());
+		tRec.signalConnectionFailed();
+		long delay = -1;
+		if (tRec.isOrHasEverConnected()) {
+			delay = ConnectionTester.RECONNECT_TRY_SEC;
+		} else {
+			delay = ConnectionTester.RETEST_TRY_SEC;
+		}
+		this.retryPeers
+				.add(new PeerAddressTimePair(failedPeer.getAddress(), System.currentTimeMillis() + delay * 1000));
 		this.myParent.logEvent("versionfailed " + failedPeer.getAddress().toString() + " - " + reason,
 				Manager.DEBUG_LOG_LEVEL);
 
@@ -293,7 +306,7 @@ public class ConnectionTester implements Runnable {
 		 * We have a new retest option AND an open test slot, pair of events
 		 * gogo
 		 */
-		this.eventQueue.add(ConnectionEvent.AVAILOLD);
+		this.eventQueue.add(ConnectionEvent.UPDATETIMER);
 		this.eventQueue.add(ConnectionEvent.AVAILTEST);
 	}
 
