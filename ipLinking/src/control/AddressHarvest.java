@@ -50,12 +50,13 @@ public class AddressHarvest implements Runnable {
 		long ts = System.currentTimeMillis();
 		if (jitter) {
 			ts += this.rng.nextDouble() * AddressHarvest.NORMAL_RESTART_INTERVAL_SEC * 1000;
-			this.myParent.logEvent("New harvest target " + newPeer.getAddress(), Manager.DEBUG_LOG_LEVEL);
+			this.myParent.logEvent("HARVEST-NEW," + newPeer.getAddress() + "," + ts, Manager.DEBUG_LOG_LEVEL);
 		}
 		PeerTimePair tmpPair = new PeerTimePair(newPeer, ts);
 		synchronized (this.toTestQueue) {
 			this.toTestQueue.offer(tmpPair);
 		}
+		this.waitSem.release();
 	}
 
 	public boolean poisonPeer(PeerAddress addr) {
@@ -77,7 +78,7 @@ public class AddressHarvest implements Runnable {
 
 		// TODO do we want a thread pool of some type for this work?
 		if (okToStart) {
-			this.myParent.logEvent("Addr burst harvest started for " + targetPeer.getAddress(),
+			this.myParent.logEvent("HARVEST-START," + targetPeer.getAddress(),
 					Manager.DEBUG_LOG_LEVEL);
 			BurstableHarvester burstChild = new BurstableHarvester(targetPeer, this);
 			Thread burstThread = new Thread(burstChild);
@@ -115,7 +116,7 @@ public class AddressHarvest implements Runnable {
 			}
 			this.myParent.logEvent(logStrBuild.toString(), Manager.DEBUG_LOG_LEVEL);
 		}
-		this.myParent.logEvent("Address harvest finished for " + harv.getTarget().getAddress().toString() + " in "
+		this.myParent.logEvent("HARVEST-FINISH," + harv.getTarget().getAddress().toString() + ","
 				+ harv.getTotalTime(), Manager.DEBUG_LOG_LEVEL);
 
 		// TODO we need to handle the restarting more intelligently, maybe?
@@ -124,6 +125,7 @@ public class AddressHarvest implements Runnable {
 		synchronized (this.toTestQueue) {
 			this.toTestQueue.offer(tmpPair);
 		}
+		this.waitSem.release();
 	}
 
 	private long getNextTime() {
@@ -141,20 +143,19 @@ public class AddressHarvest implements Runnable {
 
 	@Override
 	public void run() {
-		long oldTime = Long.MAX_VALUE;
-		long waitTime = oldTime;
+		long waitTime = Long.MAX_VALUE;
 
 		while (true) {
 
-			boolean gotTicket = this.waitSem.tryAcquire(waitTime, TimeUnit.MILLISECONDS);
-
 			try {
+				this.waitSem.tryAcquire(waitTime, TimeUnit.MILLISECONDS);
+
 				synchronized (this.toTestQueue) {
 
 					while (!this.toTestQueue.isEmpty()
 							&& this.toTestQueue.peek().getTime() < System.currentTimeMillis()) {
 						PeerTimePair tmpPair = this.toTestQueue.poll();
-						
+
 						/*
 						 * Check to see if we're black listed
 						 */
@@ -163,7 +164,7 @@ public class AddressHarvest implements Runnable {
 							blacklisted = this.blackListSet.remove(tmpPair.getPeer().getAddress().toString());
 
 						}
-						
+
 						/*
 						 * If not black listed start
 						 */
@@ -172,21 +173,10 @@ public class AddressHarvest implements Runnable {
 						}
 					}
 				}
-				
+
 				long newTime = this.getNextTime();
-				//FIXME COMPUTE NEW WAIT TIME
-
-
-				/*
-				 * This is the next peer to update, if we can't do it now we
-				 * know there is no node in the queue we can, block until this
-				 * one is good to go
-				 */
-				long waitTime = tmpPair.getTime() - System.currentTimeMillis();
-				if (waitTime > 0) {
-					Thread.sleep(waitTime);
-				}
-
+				waitTime = newTime - System.currentTimeMillis() + 500;
+				waitTime = Math.max(waitTime, 500);
 			} catch (Exception e) {
 				this.myParent.logException(e);
 			}
