@@ -46,7 +46,6 @@ public class ConnectionTester implements Runnable {
 
 	private static final int MAX_PEERS_TO_TEST = 3000;
 	private static final long RETEST_TRY_SEC = 1800;
-	private static final long NO_VERSION_RETEST_TRY_SEC = 900;
 	private static final long RECONNECT_TRY_SEC = 300;
 
 	private static final long VERSION_TIMEOUT_SEC = 10;

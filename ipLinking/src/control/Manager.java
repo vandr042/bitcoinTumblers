@@ -89,7 +89,7 @@ public class Manager implements Runnable, AddressUser {
 		String logName = Manager.getTimestamp();
 		this.runLog = new ThreadedWriter(logName, true);
 		this.exceptionLog = new ThreadedWriter(logName + "-err", true);
-		this.myLogLevel = Manager.CRIT_LOG_LEVEL;
+		this.myLogLevel = Manager.DEBUG_LOG_LEVEL;
 		Thread loggingThread = new Thread(this.runLog);
 		Thread exceptionThread = new Thread(this.exceptionLog);
 		loggingThread.setName("Logging thread.");
