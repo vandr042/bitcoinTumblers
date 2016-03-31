@@ -116,6 +116,15 @@ public class AddressHarvest implements Runnable {
 			}
 			this.myParent.logEvent(logStrBuild.toString(), Manager.DEBUG_LOG_LEVEL);
 		}
+		List<Integer> newRecs = harv.getNewRecordsPerRound();
+		StringBuilder unseenStrBuild = new StringBuilder();
+		unseenStrBuild.append("unessen count ");
+		unseenStrBuild.append(harv.getTarget().getAddress().toString());
+		for(int counter = 0; counter < newRecs.size(); counter++){
+			unseenStrBuild.append(",");
+			unseenStrBuild.append(newRecs.get(counter));
+		}
+		this.myParent.logEvent(unseenStrBuild.toString(), Manager.DEBUG_LOG_LEVEL);
 		this.myParent.logEvent("HARVEST-FINISH," + harv.getTarget().getAddress().toString() + ","
 				+ harv.getTotalTime(), Manager.DEBUG_LOG_LEVEL);
 

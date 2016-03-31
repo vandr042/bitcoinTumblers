@@ -23,6 +23,7 @@ public class BurstableHarvester implements Runnable, AddressUser {
 
 	private HashSet<SanatizedRecord> responses;
 	private List<Long> delays;
+	private List<Integer> newRecords;
 
 	private static final int MAX_ROUNDS = 30;
 
@@ -37,6 +38,7 @@ public class BurstableHarvester implements Runnable, AddressUser {
 
 		this.responses = new HashSet<SanatizedRecord>();
 		this.delays = new ArrayList<Long>();
+		this.newRecords = new ArrayList<Integer>();
 	}
 
 	@Override
@@ -67,12 +69,16 @@ public class BurstableHarvester implements Runnable, AddressUser {
 
 	@Override
 	public void getAddresses(AddressMessage m, Peer myPeer) {
+		int tempNew = 0;
 		synchronized (this) {
 			for(PeerAddress tAddr: m.getAddresses()){
 				//TODO how do we actually want to handle updated time stamps?
 				SanatizedRecord tRec = new SanatizedRecord(tAddr);
-				this.responses.add(tRec);
+				if(this.responses.add(tRec)){
+					tempNew++;
+				}
 			}
+			this.newRecords.add(tempNew);
 			this.advance.release();
 		}
 	}
@@ -87,6 +93,10 @@ public class BurstableHarvester implements Runnable, AddressUser {
 
 	public List<Long> getInterMsgIntervals() {
 		return this.delays;
+	}
+	
+	public List<Integer> getNewRecordsPerRound(){
+		return this.newRecords;
 	}
 	
 	public Long getTotalTime(){
