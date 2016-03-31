@@ -1,4 +1,4 @@
-package bitcoinLink;
+package peerLink;
 
 import java.util.Collections;
 import java.util.LinkedList;

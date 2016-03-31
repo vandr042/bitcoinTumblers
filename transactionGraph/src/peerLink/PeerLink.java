@@ -1,4 +1,4 @@
-package bitcoinLink;
+package peerLink;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -6,7 +6,9 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -60,6 +62,7 @@ public class PeerLink {
 		String peer = tspp.getPeer();
 		HashSet<String> peerConns = pMap.get(peer);
 		HashSet<String> intersectConns = (HashSet<String>) peerConns.clone();
+		
 		// HashSet<String> trailIConns = (HashSet<String>)
 		// intersectConns.clone();
 	
@@ -81,6 +84,57 @@ public class PeerLink {
 		// return intersectConns;
 		// }
 		return intersectConns;
+	}
+	
+	
+	
+	/*
+	 * computeMostCommonPeers computes the peers connected to the greatest number of peers in the list given, up to a certain timestamp.
+	 * \param peers is a sorted LinkedList of TStampPeerPairs
+	 * \param tStampDepth is a maximum time stamp for which to compute the most common peers
+	 * returns a linked list of the peers containing unique most common peers (different peers seen same # times) in their conn set
+	 */
+	private LinkedList<String> computeMostCommonPeers(LinkedList<TStampPeerPair>  peers, int tStampDepth){
+		int tStampsDeep;
+		LinkedList<String> peerList;
+		HashMap<String, Integer> peerSeenCount;
+		
+		tStampsDeep = 0;
+		peerSeenCount = new HashMap<String, Integer>();
+		peerList = new LinkedList<String>();
+		
+		while(tStampsDeep < tStampDepth){
+			long currTstamp,lastTstamp;
+			TStampPeerPair tspp = peers.get(0);
+			String peer = tspp.getPeer();
+			lastTstamp = tspp.getTimeStamp();
+			currTstamp = tspp.getTimeStamp();
+			
+			for(int i = 1; i < peers.size(); i++){
+				if (currTstamp > lastTstamp)
+					tStampsDeep++;
+				lastTstamp = currTstamp;
+				HashSet<String> peerConns = this.pMap.get(peer);
+				for(String p:peerConns){
+					if (peerSeenCount.get(p) == null)
+						peerSeenCount.put(p, 1);
+					else{
+						int count = peerSeenCount.get(p);
+						peerSeenCount.put(p, count + 1);
+					}
+					tspp = peers.get(i);
+					peer = tspp.getPeer();
+					currTstamp = tspp.getTimeStamp();
+				}
+			}
+			break;
+		}//end while
+		
+		Set<String> possiblePeers = peerSeenCount.keySet();
+		for (String p:possiblePeers){
+			
+		}
+		return null;
 	}
 
 	private void buildMapsFromFile(String filename) throws IOException {
