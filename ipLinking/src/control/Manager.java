@@ -20,6 +20,7 @@ import org.bitcoinj.net.NioClientManager;
 import org.bitcoinj.net.discovery.DnsDiscovery;
 import org.bitcoinj.net.discovery.PeerDiscoveryException;
 import org.bitcoinj.params.MainNetParams;
+import org.bitcoinj.utils.BriefLogFormatter;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.impl.Arguments;
@@ -61,11 +62,17 @@ public class Manager implements Runnable, AddressUser {
 	public static final int CRIT_LOG_LEVEL = 2;
 	public static final int DEBUG_LOG_LEVEL = 3;
 
+	private static final long INT_WINDOW_SEC = 4500;
+
+	private static final boolean BULKY_STATUS = false;
+	private static final boolean HUMAN_READABLE_DATE = false;
+
 	public Manager(Set<String> recoverySet) throws IOException {
 		/*
 		 * Build the params and context objects which are needed by other data
 		 * structures.
 		 */
+        BriefLogFormatter.init();
 		this.params = MainNetParams.get();
 		this.bcjContext = new Context(params);
 		Peer.lobotomizeMe();
@@ -128,7 +135,7 @@ public class Manager implements Runnable, AddressUser {
 		/*
 		 * Learn peers from the DNS Discovery system of bitcoin
 		 */
-		PeerAddress[] startingList = null;
+		List<PeerAddress> startingList = null;
 		if (recoverySet == null) {
 			this.logEvent("DNS bootstrap start", Manager.EMERGENCY_LOG_LEVEL);
 			PeerAddress[] dnsPeers = this.buildDNSBootstrap();
@@ -136,14 +143,17 @@ public class Manager implements Runnable, AddressUser {
 			if (dnsPeers == null) {
 				throw new RuntimeException("Failure during DNS peer fetch.");
 			}
-			startingList = dnsPeers;
+			startingList = Arrays.asList(dnsPeers);
 		} else {
-			startingList = new PeerAddress[recoverySet.size()];
-			int pos = 0;
+			startingList = new LinkedList<PeerAddress>();
 			for (String tStr : recoverySet) {
 				String[] tokens = tStr.split(":");
-				startingList[pos] = new PeerAddress(InetAddress.getByName(tokens[0].split("/")[1]), Integer.parseInt(tokens[1]));
-				pos++;
+				try {
+					startingList.add(new PeerAddress(InetAddress.getByName(tokens[0].split("/")[1]),
+							Integer.parseInt(tokens[1])));
+				} catch (Exception e) {
+					this.logException(e);
+				}
 			}
 		}
 
@@ -227,6 +237,10 @@ public class Manager implements Runnable, AddressUser {
 	public void getBurstResults(SanatizedRecord fromPeer, HashSet<SanatizedRecord> responses) {
 		for (SanatizedRecord tLearned : responses) {
 			this.handleAddressNotificiation(tLearned, fromPeer);
+			if ((System.currentTimeMillis() / 1000) - tLearned.getTS() < Manager.INT_WINDOW_SEC) {
+				this.logEvent("Poss Connect Point," + fromPeer.toString() + "," + tLearned.toString() + ","
+						+ tLearned.getTS(), Manager.CRIT_LOG_LEVEL);
+			}
 		}
 	}
 
@@ -247,7 +261,7 @@ public class Manager implements Runnable, AddressUser {
 				this.logEvent(
 						"ANNOUNCED," + incPeer.toString() + ",from," + fromPeer.toString() + "," + incPeer.getTS(),
 						Manager.CRIT_LOG_LEVEL);
-				this.connTester.givePriorityConnectTarget(tAddr);
+				this.connTester.givePriorityConnectTarget(incPeer);
 			}
 			this.handleAddressNotificiation(incPeer, fromPeer);
 		}
@@ -394,8 +408,12 @@ public class Manager implements Runnable, AddressUser {
 	}
 
 	public static String getTimestamp() {
-		Date curDate = new Date();
-		return Manager.LONG_DF.format(curDate);
+		if (Manager.HUMAN_READABLE_DATE) {
+			Date curDate = new Date();
+			return Manager.LONG_DF.format(curDate);
+		} else {
+			return Long.toString(System.currentTimeMillis());
+		}
 	}
 
 	public static Set<String> buildRecoverySet() throws IOException {
@@ -445,14 +463,12 @@ public class Manager implements Runnable, AddressUser {
 
 		long nextLargeLog = System.currentTimeMillis() + 1800 * 1000;
 		while (true) {
-			Thread.sleep(120 * 1000);
-			//Thread.sleep(600 * 1000);
-
+			Thread.sleep(300 * 1000);
 			String tempTS = Long.toString((System.currentTimeMillis() / 1000));
 
 			self.makeRecoveryFile(tempTS);
 
-			if (System.currentTimeMillis() > nextLargeLog) {
+			if (Manager.BULKY_STATUS && System.currentTimeMillis() > nextLargeLog) {
 				nextLargeLog = System.currentTimeMillis() + 1800 * 1000;
 				self.dumpTimeSkew("skew-" + tempTS);
 				self.dumpKnowledge("know-" + tempTS);

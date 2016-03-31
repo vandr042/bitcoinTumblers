@@ -107,6 +107,10 @@ public class PeerRecord {
 	public long getTimeDisconnected() {
 		return timeDisconnected;
 	}
+	
+	public boolean isOrHasEverConnected(){
+		return this.timeDisconnected != -1 || this.timeConnected != -1;
+	}
 
 	public long getLastUptime() {
 		if (this.timeConnected != -1) {
