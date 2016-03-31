@@ -11,6 +11,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -19,9 +20,11 @@ public class PeerLinkTester {
 	private int depthStep;
 	private PeerLink peerLink;
 	private int maxDepth;
+	private int tStampDepth;
 
-	public PeerLinkTester(int stepSize, PeerLink pl, int depth, String truthFile) throws IOException {
+	public PeerLinkTester(int stepSize, PeerLink pl, int depth, String truthFile, int tsDepth) throws IOException {
 		depthStep = stepSize;
+		tStampDepth = tsDepth;
 		peerLink = pl;
 		maxDepth = depth;
 		buildMapFromTruth(truthFile);
@@ -54,6 +57,48 @@ public class PeerLinkTester {
 					+ " non zero avg set size: " + (numPeers / nonZeroCount) + "\n");
 		}
 		bw.close();
+	}
+	
+	public void testBestDepthWithVoting(String outFile) throws IOException {
+		System.out.println("********************************** Testing for Depth ************************************");
+		File f = new File(outFile);
+		BufferedWriter bw = new BufferedWriter(new FileWriter(f));
+		for (int searchDepth = depthStep; searchDepth < tStampDepth; searchDepth += depthStep) {
+			double avgSetSize, accuracy, totalSets, numPeers, nonZeroCount;
+			numPeers = 0;
+			nonZeroCount = 0;
+			HashMap<String, Set<String>> txToPeers = peerLink.simVoting(searchDepth);
+			Collection<Set<String>> peers = txToPeers.values();
+			for (Set<String> pset : peers) {
+				numPeers += pset.size();
+				if (pset.size() > 0) {
+					nonZeroCount += 1.0;
+				}
+			}
+			totalSets = peers.size();
+			avgSetSize = numPeers / totalSets;
+			accuracy = this.checkVotingAccuracy(txToPeers);
+			bw.write("Depth: " + searchDepth + " Accuracy: " + accuracy + " avgSetSize: " + avgSetSize
+					+ " non zero avg set size: " + (numPeers / nonZeroCount) + "\n");
+		}
+		bw.close();
+	}
+	
+	private float checkVotingAccuracy(HashMap<String, Set<String>> txPeerMap){
+		float accuracy, totalTx, correct;
+		correct = 0;
+		String[] txArr = new String[txPeerMap.keySet().size()];
+		txPeerMap.keySet().toArray(txArr);
+		totalTx = txArr.length;
+		for (String tx : txArr) {
+			String peer = truthTxToPeer.get(tx);
+			Set<String> possiblePeers = txPeerMap.get(tx);
+			if (possiblePeers.contains(peer) == true) {
+				correct += 1;
+			}
+		}
+		accuracy = correct / totalTx;
+		return accuracy;
 	}
 
 	/* private helper */
@@ -111,8 +156,8 @@ public class PeerLinkTester {
 
 	private static void gogo(String fileBase) throws IOException {
 		PeerLink pl = new PeerLink("../miscScripts/" + fileBase + "-out.log");
-		PeerLinkTester test = new PeerLinkTester(1, pl, 10, "../miscScripts/" + fileBase + "-groundTruth.log");
-		test.testForBestDepth(fileBase.split("-")[0] + ".txt");
+		PeerLinkTester test = new PeerLinkTester(1, pl, 10, "../miscScripts/" + fileBase + "-groundTruth.log",1);
+		test.testBestDepthWithVoting(fileBase.split("-")[0] + ".txt");
 	}
 
 	public static void main(String[] args) throws IOException {

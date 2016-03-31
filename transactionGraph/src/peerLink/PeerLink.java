@@ -50,7 +50,27 @@ public class PeerLink {
 		// bw.close();
 		return txToPeersMap;
 	}
-
+	
+	public HashMap<String, Set<String>> simVoting(int tStampDepth){
+		System.out.println("Starting simulation with tStamp depth: " + tStampDepth);
+		HashMap<String, Set<String>> txToPeersMap = new HashMap<String, Set<String>>();
+		Set<String> txIDs = txMap.keySet();
+		String[] txArr = new String[txIDs.size()];
+		txIDs.toArray(txArr);
+		for (String tx : txArr) {
+			// bw.write("tx: " + tx + "\n");
+			txToPeersMap.put(tx, this.findSenderByVoting(tx, tStampDepth).keySet());
+		}
+		// bw.close();
+		return txToPeersMap;
+	}
+	
+	public HashMap<String,HashSet<String>> findSenderByVoting(String tx, int tStampDepth){
+		LinkedList<TStampPeerPair> tsppList = txMap.get(tx);
+		Collections.sort(tsppList);
+		HashMap<String,HashSet<String>> mcpSeenByMap = computeMostCommonPeers(tsppList,tStampDepth);
+		return mcpSeenByMap;
+	}
 	/*
 	 * findSender starts at the earliest known timestamp and iterates to a
 	 * specified search depth, intersecting the peerConn sets
@@ -86,30 +106,41 @@ public class PeerLink {
 		return intersectConns;
 	}
 	
+	/*private HashSet<String> intersectPeerConns(String peer, LinkedList<TStampPeerPair> tsppList){
+		HashSet<String> tmpPeerConns = pMap.get(peer);
+	}*/
+	
 	
 	
 	/*
-	 * computeMostCommonPeers computes the peers connected to the greatest number of peers in the list given, up to a certain timestamp.
+	 * computeMostCommonPeers computes the peer who the greatest number of peers said they heard about the transaction from in the list given, up to a certain timestamp.
 	 * \param peers is a sorted LinkedList of TStampPeerPairs
 	 * \param tStampDepth is a maximum time stamp for which to compute the most common peers
 	 * returns a linked list of the peers containing unique most common peers (different peers seen same # times) in their conn set
 	 */
-	private LinkedList<String> computeMostCommonPeers(LinkedList<TStampPeerPair>  peers, int tStampDepth){
+	private HashMap<String,HashSet<String>> computeMostCommonPeers(LinkedList<TStampPeerPair>  peers, int tStampDepth){
 		int tStampsDeep;
-		LinkedList<String> peerList;
-		HashMap<String, Integer> peerSeenCount;
+		LinkedList<PeerCountPair> pcpList;			// List private peers and the number of times they are seen			
+		HashMap<String, Integer> peerSeenCount; 	// Map of peers to times seen in order to implement counting
+		LinkedList<String> mostCommonPeers;			// This is a list of the most common peers
+		HashMap<String, HashSet<String>> mcpSeenBy; // map from the most common peers to a set of the peers who said they saw them
+		
 		
 		tStampsDeep = 0;
 		peerSeenCount = new HashMap<String, Integer>();
-		peerList = new LinkedList<String>();
+		pcpList = new LinkedList<PeerCountPair>();
 		
+		/**************************************************************
+		 * Populate peerSeenCount with peers and the number of times 
+		 * they are seen in peerConn sets. 
+		 **************************************************************/
 		while(tStampsDeep < tStampDepth){
 			long currTstamp,lastTstamp;
-			TStampPeerPair tspp = peers.get(0);
+			TStampPeerPair tspp = peers.get(0);	
 			String peer = tspp.getPeer();
 			lastTstamp = tspp.getTimeStamp();
 			currTstamp = tspp.getTimeStamp();
-			
+	
 			for(int i = 1; i < peers.size(); i++){
 				if (currTstamp > lastTstamp)
 					tStampsDeep++;
@@ -129,14 +160,66 @@ public class PeerLink {
 			}
 			break;
 		}//end while
+		/*************************************************************/
 		
+		
+		/**************************************************************
+		 ************  Extract the most common peers ******************
+		 **************************************************************/
 		Set<String> possiblePeers = peerSeenCount.keySet();
 		for (String p:possiblePeers){
+			PeerCountPair peerCountPair;
 			
+			peerCountPair = new PeerCountPair(p,peerSeenCount.get(p));
+			pcpList.add(peerCountPair);
 		}
-		return null;
+		Collections.sort(pcpList);
+		int highCount, currCount, j;
+		j= 0;
+		highCount = currCount = pcpList.get(0).getCount();
+		while (currCount == highCount){
+			j++;
+			currCount = pcpList.get(j).getCount();
+		}
+		pcpList = (LinkedList<PeerCountPair>) pcpList.subList(0, j);
+		mostCommonPeers = new LinkedList<String>();
+		for (PeerCountPair pcp:pcpList){
+			String peer = pcp.getPeer();
+			mostCommonPeers.add(peer);
+		}
+		/*************************************************************/
+		
+		
+		
+		/***********************************************************
+		 * For each most common peer, find the public peers who are 
+		 * connected to the common peer 
+		 ************************************************************/
+		mcpSeenBy = new HashMap<String,HashSet<String>>();
+		for (String mcp: mostCommonPeers){
+			HashSet<String> seenBy = new HashSet<String>();	//set of peers a given peer was seen by
+			for (int i = 0; i < peers.size(); i++){
+				TStampPeerPair  tspp = peers.get(i);
+				String peer = tspp.getPeer();
+				HashSet<String> peerConns = pMap.get(peer);
+				if (peerConns.contains(mcp)){
+					seenBy.add(peer);
+				}
+			}
+			mcpSeenBy.put(mcp, seenBy);
+		}
+		/************************************************************/
+		
+		return mcpSeenBy;
 	}
+	/*********************************************************************/
+	
 
+	
+	/********************************************************************
+	 * buildMapsFromFile reads in from input file to build pMap and txMap
+	 * \param filename - name of the file to read
+	 ********************************************************************/
 	private void buildMapsFromFile(String filename) throws IOException {
 		File f = new File(filename);
 		BufferedReader reader = new BufferedReader(new FileReader(f));
@@ -191,6 +274,7 @@ public class PeerLink {
 		reader.close();
 		System.out.println("Finished building maps...");
 	}
+	/************************************************************/
 
 	public HashMap<String, HashSet<String>> getPmap() {
 		return pMap;
