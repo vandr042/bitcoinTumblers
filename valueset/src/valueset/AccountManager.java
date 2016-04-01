@@ -2,27 +2,97 @@ package valueset;
 
 import java.io.*;
 import java.util.*;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
+import org.json.*;
 
 public class AccountManager {
 
 	private ArrayList<Transaction> deposits = null;
 	private ArrayList<Transaction> withdrawls = null;
-	
-	private HashMap<String, Set<String>> alliases = null;
+	private HashMap<String, Set<String>> aliases = null;
 
 	public AccountManager() {
 		this.deposits = new ArrayList<Transaction>();
 		this.withdrawls = new ArrayList<Transaction>();
-		this.alliases = new HashMap<String, Set<String>>();
+		this.aliases = new HashMap<String, Set<String>>();
 		this.importData("../miscScripts/balance-synth.log");
 		Collections.sort(this.deposits);
 		Collections.sort(this.withdrawls);
 	}
 	
-	public void goToBlockchainExplorer(){
-		//TODO do the blockchain explorer step
-		//WILL BUILD the alliases data structure
+	public void generateAliases(){
+            //for (Transaction currentWithdrawl : withdrawls){
+                goToBlockchainExplorer(new Transaction(false, "19SokJG7fgk8iTjemJ2obfMj14FM16nqzj", 1457868000, 1.000)); //Just for temporary use
+                System.out.println(aliases);
+            //}
 	}
+        
+        public void goToBlockchainExplorer(Transaction withdrawl){
+            String urlString = "https://blockexplorer.com/api/txs/?address=" + withdrawl.getKeyResponsible();
+            StringBuffer response = new StringBuffer();
+            String transactionData = ""; //Will contain the JSON
+            
+            //Handle the HTTP Connection
+            try { 
+                URL urlObj = new URL(urlString);
+                HttpURLConnection con = (HttpURLConnection) urlObj.openConnection();
+                    con.setRequestMethod("GET");
+                BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
+                String inputLine;
+                while ((inputLine = in.readLine()) != null) {
+                    response.append(inputLine);
+                }
+                in.close();
+                con.disconnect();
+                transactionData = response.toString();
+            } catch(IOException e) {
+                e.printStackTrace();
+            }
+            
+            //Handle the parsing of the JSON
+            try {
+                InputStream stream = new ByteArrayInputStream(transactionData.getBytes(StandardCharsets.UTF_8));
+                JSONTokener tokener = new JSONTokener(stream);
+                JSONObject root = new JSONObject(tokener);
+                JSONArray txs = root.getJSONArray("txs");
+                
+                for (int i = 0; i < txs.length(); i++){
+                    JSONObject txInfo = txs.getJSONObject(i);
+                    String time = txInfo.get("time").toString();
+                    String valueOut = txInfo.get("valueOut").toString();
+
+                    //Only transactions that happen after the tumbler withdrawl can be considered for containing aliases
+                    if (Long.parseLong(time) > withdrawl.getTimeStamp()){
+                        JSONArray vOut = txInfo.getJSONArray("vout");
+                        //Loop through all the vOut's of the transaction
+                        for (int j = 0; j < vOut.length(); j++){
+                            JSONObject valueOutInfo = vOut.getJSONObject(j);
+                            JSONObject scriptPubKey = valueOutInfo.getJSONObject("scriptPubKey");
+                            String vOutValue = valueOutInfo.get("value").toString();
+                            JSONArray vOutAddresses = scriptPubKey.getJSONArray("addresses");
+                            
+                            //Only vOut's with a value less than or equal to our withdrawl value can be given to an alias
+                            if (Double.parseDouble(vOutValue) <= withdrawl.getValue()){
+                                //Loop through all the addresses in the vOut
+                                for (int k = 0; k < vOutAddresses.length(); k++){
+                                    //Don't put the key itself in the alias set too
+                                    if (!vOutAddresses.get(k).toString().equals(withdrawl.getKeyResponsible())){
+                                        //If we don't have this guy on record, set up a alias for him
+                                        if (!aliases.containsKey(withdrawl.getKeyResponsible())){
+                                            aliases.put(withdrawl.getKeyResponsible(), new HashSet<String>());
+                                        }
+                                        aliases.get(withdrawl.getKeyResponsible()).add(vOutAddresses.get(k).toString());
+                                    }
+                                }
+                            }
+                        }
+                    } 
+                }  
+            } catch (JSONException e){
+                e.printStackTrace();
+            } 
+        }
 
 	public List<Integer> runExperiment(boolean reportKeys) {
 		BufferedWriter fos = null;
