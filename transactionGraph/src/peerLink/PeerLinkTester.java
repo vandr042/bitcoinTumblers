@@ -63,7 +63,7 @@ public class PeerLinkTester {
 		System.out.println("********************************** Testing for Depth ************************************");
 		File f = new File(outFile);
 		BufferedWriter bw = new BufferedWriter(new FileWriter(f));
-		for (int searchDepth = depthStep; searchDepth < tStampDepth; searchDepth += depthStep) {
+		for (int searchDepth = depthStep; searchDepth <= tStampDepth; searchDepth += depthStep) {
 			double avgSetSize, accuracy, totalSets, numPeers, nonZeroCount;
 			numPeers = 0;
 			nonZeroCount = 0;
@@ -156,15 +156,15 @@ public class PeerLinkTester {
 
 	private static void gogo(String fileBase) throws IOException {
 		PeerLink pl = new PeerLink("../miscScripts/" + fileBase + "-out.log");
-		PeerLinkTester test = new PeerLinkTester(1, pl, 10, "../miscScripts/" + fileBase + "-groundTruth.log",1);
+		PeerLinkTester test = new PeerLinkTester(1, pl, 10, "../miscScripts/" + fileBase + "-groundTruth.log",10);
 		test.testBestDepthWithVoting(fileBase.split("-")[0] + ".txt");
 	}
 
 	public static void main(String[] args) throws IOException {
-//		gogo("peer-finder-synth");
-//		gogo("allKnown-peer-finder-synth");
-//		gogo("perfect-peer-finder-synth");
-//		gogo("zeroRandom-peer-finder-synth");
+		gogo("peer-finder-synth");
+		gogo("allKnown-peer-finder-synth");
+		gogo("perfect-peer-finder-synth");
+		gogo("zeroRandom-peer-finder-synth");
 		gogo("realDelay-peer-finder-synth");
 	}
 }
