@@ -222,14 +222,15 @@ public class Manager implements Runnable, AddressUser {
 	}
 
 	public void resolvedStartedPeer(Peer thePeer) {
-		this.addrHarvester.giveNewHarvestTarget(thePeer, true);
-		this.peerObjs.put(new SanatizedRecord(thePeer.getAddress()), thePeer);
+		SanatizedRecord myRecord = new SanatizedRecord(thePeer.getAddress());
+		this.addrHarvester.giveNewHarvestTarget(myRecord, true);
+		this.peerObjs.put(myRecord, thePeer);
 	}
 
 	public void cleanupDeadPeer(Peer thePeer) {
 		SanatizedRecord tRec = new SanatizedRecord(thePeer.getAddress());
 		if (this.peerObjs.remove(tRec) != null) {
-			this.addrHarvester.poisonPeer(thePeer.getAddress());
+			this.addrHarvester.poisonPeer(tRec);
 			this.connTester.giveReconnectTarget(thePeer.getAddress());
 		}
 	}
@@ -280,6 +281,10 @@ public class Manager implements Runnable, AddressUser {
 		return this.records.get(tmpRec);
 	}
 
+	public Peer getPeerObject(SanatizedRecord targetRecord){
+		return this.peerObjs.get(targetRecord);
+	}
+	
 	public NioClientManager getRandomNIOClient() {
 		int slot = Manager.insecureRandom.nextInt(Manager.NIO_CLIENT_MGER_COUNT);
 		return this.nioManagers[slot];

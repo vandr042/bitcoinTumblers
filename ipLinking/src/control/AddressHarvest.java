@@ -2,97 +2,127 @@ package control;
 
 import java.util.*;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.PriorityBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import org.bitcoinj.core.Peer;
-import org.bitcoinj.core.PeerAddress;
 
-import data.PeerTimePair;
 import data.SanatizedRecord;
+import data.WaitMap;
 import listeners.BurstableHarvester;
 
-//TODO use an event queue like we do in connection tester?
 public class AddressHarvest implements Runnable {
 
 	private Manager myParent;
 	private Random rng;
 
-	private PriorityQueue<PeerTimePair> toTestQueue;
+	private WaitMap<SanatizedRecord> nextHarvestMap;
+	private HashMap<SanatizedRecord, Thread> harvesterThreads;
 
-	private Set<String> blackListSet;
-	private Set<String> runningSet;
-
-	private ThreadPoolExecutor burstThreadPool;
 	private Semaphore waitSem;
 
-	// TODO clean this code
 	private static final long NORMAL_RESTART_INTERVAL_SEC = 1800;
 
 	private static final boolean LOG_ADDR_TIMING = false;
+	private static final boolean LOG_UNSEEN_STATS = true;
 
 	public AddressHarvest(Manager parent) {
 		this.myParent = parent;
 		this.rng = new Random();
 
-		this.toTestQueue = new PriorityQueue<PeerTimePair>();
-		this.blackListSet = new HashSet<String>();
-		this.runningSet = new HashSet<String>();
+		this.nextHarvestMap = new WaitMap<SanatizedRecord>();
+		this.harvesterThreads = new HashMap<SanatizedRecord, Thread>();
 
 		this.waitSem = new Semaphore(0);
-
-		this.burstThreadPool = new ThreadPoolExecutor(1, 10, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
 	}
 
-	public void giveNewHarvestTarget(Peer newPeer, boolean jitter) {
+	public void giveNewHarvestTarget(SanatizedRecord newPeer, boolean jitter) {
 		long ts = System.currentTimeMillis();
 		if (jitter) {
 			ts += this.rng.nextDouble() * AddressHarvest.NORMAL_RESTART_INTERVAL_SEC * 1000;
-			this.myParent.logEvent("HARVEST-NEW," + newPeer.getAddress() + "," + ts, Manager.DEBUG_LOG_LEVEL);
+			this.myParent.logEvent("HARVEST-NEW," + newPeer.toString() + "," + ts, Manager.DEBUG_LOG_LEVEL);
 		}
-		PeerTimePair tmpPair = new PeerTimePair(newPeer, ts);
-		synchronized (this.toTestQueue) {
-			this.toTestQueue.offer(tmpPair);
-		}
-		this.waitSem.release();
-	}
 
-	public boolean poisonPeer(PeerAddress addr) {
-		boolean changed = false;
 		synchronized (this) {
-			changed = this.blackListSet.add(addr.toString());
-		}
-		return changed;
-	}
+			/*
+			 * I'm not 100% sure that this scenario happening is an incorrectly
+			 * handled thing. If the Peer D/Cs, then reconnects before the
+			 * harvest thread notices the interrupt flag then this could happen,
+			 * for now we're going to log this as an illegal state, but allow
+			 * the addition because of the above scenario, but I'm guessing this
+			 * is an exception in the error log that can be ignored
+			 */
+			if (this.harvesterThreads.containsKey(newPeer)) {
+				this.myParent.logException(new IllegalStateException(
+						"Tried to add newly connected peer to harvester, but we're harvesting, can probablly be ignored."));
+			}
 
-	public void startNewBurstHarvest(Peer targetPeer) {
-		boolean okToStart = false;
-		synchronized (this) {
-			if (!this.runningSet.contains(targetPeer.getAddress().toString())) {
-				this.runningSet.add(targetPeer.getAddress().toString());
-				okToStart = true;
+			if (this.nextHarvestMap.updateObject(newPeer, ts)) {
+				this.waitSem.release();
 			}
 		}
+	}
 
-		// TODO do we want a thread pool of some type for this work?
-		if (okToStart) {
-			this.myParent.logEvent("HARVEST-START," + targetPeer.getAddress(),
-					Manager.DEBUG_LOG_LEVEL);
-			BurstableHarvester burstChild = new BurstableHarvester(targetPeer, this);
-			Thread burstThread = new Thread(burstChild);
-			burstThread.start();
+	public void poisonPeer(SanatizedRecord addr) {
+		synchronized (this) {
+			/*
+			 * Wake up and kill any currently running harvester for that host
+			 */
+			if (this.harvesterThreads.containsKey(addr)) {
+				this.harvesterThreads.get(addr).interrupt();
+			}
+
+			/*
+			 * Purge all references to that host's wait time as we're not
+			 * starting a harvester
+			 */
+			if (this.nextHarvestMap.deleteWait(addr)) {
+				this.waitSem.release();
+			}
 		}
 	}
 
-	public void reportFinishedBurst(BurstableHarvester harv) {
+	private void startNewBurstHarvest(SanatizedRecord theRecord) {
+
+		synchronized (this) {
+			/*
+			 * Step one, sanity check that we're not already running
+			 */
+			if (!this.harvesterThreads.containsKey(theRecord)) {
+
+				/*
+				 * Slightly concerned with us getting a null peer back
+				 * magically, so test and log if it happens to the exception log
+				 */
+				Peer targetPeer = this.myParent.getPeerObject(theRecord);
+				if (targetPeer != null) {
+					this.myParent.logEvent("HARVEST-START," + theRecord.toString(), Manager.DEBUG_LOG_LEVEL);
+
+					/*
+					 * Create the harvester thread and remember it in case we
+					 * have to interrupt it
+					 */
+					BurstableHarvester burstChild = new BurstableHarvester(theRecord, targetPeer, this);
+					Thread burstThread = new Thread(burstChild, "Burst Harvest - " + theRecord.toString());
+					this.harvesterThreads.put(theRecord, burstThread);
+
+					/*
+					 * Lastly start the harvester
+					 */
+					burstThread.start();
+				} else {
+					this.myParent.logException(new NullPointerException("Tried to start harvest, but got null peer."));
+				}
+			}
+		}
+	}
+
+	public void reportFinishedBurst(BurstableHarvester harv, boolean restart) {
 
 		/*
 		 * Step one, we're not running, so remove it from the running set
 		 */
 		synchronized (this) {
-			this.runningSet.remove(harv.getTarget().getAddress().toString());
+			this.harvesterThreads.remove(harv.getMyRecord());
 		}
 
 		/*
@@ -103,7 +133,7 @@ public class AddressHarvest implements Runnable {
 		this.myParent.getBurstResults(new SanatizedRecord(harv.getTarget().getAddress()), harv.getResponses());
 
 		/*
-		 * Log how long this took us
+		 * Log do end of harvest logging
 		 */
 		if (AddressHarvest.LOG_ADDR_TIMING) {
 			List<Long> timeDeltas = harv.getInterMsgIntervals();
@@ -116,38 +146,36 @@ public class AddressHarvest implements Runnable {
 			}
 			this.myParent.logEvent(logStrBuild.toString(), Manager.DEBUG_LOG_LEVEL);
 		}
-		List<Integer> newRecs = harv.getNewRecordsPerRound();
-		StringBuilder unseenStrBuild = new StringBuilder();
-		unseenStrBuild.append("unseen count ");
-		unseenStrBuild.append(harv.getTarget().getAddress().toString());
-		for(int counter = 0; counter < newRecs.size(); counter++){
-			unseenStrBuild.append(",");
-			unseenStrBuild.append(newRecs.get(counter));
+		if (AddressHarvest.LOG_UNSEEN_STATS) {
+			List<Integer> newRecs = harv.getNewRecordsPerRound();
+			StringBuilder unseenStrBuild = new StringBuilder();
+			unseenStrBuild.append("unseen count ");
+			unseenStrBuild.append(harv.getTarget().getAddress().toString());
+			for (int counter = 0; counter < newRecs.size(); counter++) {
+				unseenStrBuild.append(",");
+				unseenStrBuild.append(newRecs.get(counter));
+			}
+			this.myParent.logEvent(unseenStrBuild.toString(), Manager.DEBUG_LOG_LEVEL);
 		}
-		this.myParent.logEvent(unseenStrBuild.toString(), Manager.DEBUG_LOG_LEVEL);
-		this.myParent.logEvent("HARVEST-FINISH," + harv.getTarget().getAddress().toString() + ","
-				+ harv.getTotalTime(), Manager.DEBUG_LOG_LEVEL);
+		this.myParent.logEvent("HARVEST-FINISH," + harv.getTarget().getAddress().toString() + "," + harv.getTotalTime(),
+				Manager.DEBUG_LOG_LEVEL);
 
-		// TODO we need to handle the restarting more intelligently, maybe?
-		PeerTimePair tmpPair = new PeerTimePair(harv.getTarget(),
-				System.currentTimeMillis() + AddressHarvest.NORMAL_RESTART_INTERVAL_SEC * 1000);
-		synchronized (this.toTestQueue) {
-			this.toTestQueue.offer(tmpPair);
-		}
-		this.waitSem.release();
-	}
-
-	private long getNextTime() {
-		long result = -1;
-		synchronized (this.toTestQueue) {
-			PeerTimePair head = this.toTestQueue.peek();
-			if (head == null) {
-				result = Long.MAX_VALUE;
-			} else {
-				result = head.getTime();
+		/*
+		 * Put the node's next harvest time into the queue if the harvester
+		 * finished without error
+		 */
+		if (restart) {
+			long nextHarvestTime = System.currentTimeMillis() + AddressHarvest.NORMAL_RESTART_INTERVAL_SEC * 1000;
+			synchronized (this) {
+				if (this.nextHarvestMap.updateObject(harv.getMyRecord(), nextHarvestTime)) {
+					this.waitSem.release();
+				}
 			}
 		}
-		return result;
+	}
+
+	public void noteKilledHarvester(SanatizedRecord tRec) {
+		this.myParent.logEvent("HARVEST-KILLED," + tRec, Manager.DEBUG_LOG_LEVEL);
 	}
 
 	@Override
@@ -157,33 +185,33 @@ public class AddressHarvest implements Runnable {
 		while (true) {
 
 			try {
+				/*
+				 * Sleep until the sleep time finishes, or it needs to be
+				 * updated, which we're told of via the semaphore
+				 */
 				this.waitSem.tryAcquire(waitTime, TimeUnit.MILLISECONDS);
 
-				synchronized (this.toTestQueue) {
-
-					while (!this.toTestQueue.isEmpty()
-							&& this.toTestQueue.peek().getTime() < System.currentTimeMillis()) {
-						PeerTimePair tmpPair = this.toTestQueue.poll();
-
-						/*
-						 * Check to see if we're black listed
-						 */
-						boolean blacklisted = false;
-						synchronized (this.blackListSet) {
-							blacklisted = this.blackListSet.remove(tmpPair.getPeer().getAddress().toString());
-
-						}
-
-						/*
-						 * If not black listed start
-						 */
-						if (!blacklisted) {
-							this.startNewBurstHarvest(tmpPair.getPeer());
+				/*
+				 * Walk through nodes in the "queue" (harvest map) finding those
+				 * who are ready to start, and start them
+				 */
+				SanatizedRecord toStart = null;
+				do {
+					toStart = null;
+					synchronized (this) {
+						if (this.nextHarvestMap.getNextExpire() < System.currentTimeMillis()) {
+							toStart = this.nextHarvestMap.popNext();
 						}
 					}
-				}
+					if (toStart != null) {
+						this.startNewBurstHarvest(toStart);
+					}
+				} while (toStart != null);
 
-				long newTime = this.getNextTime();
+				/*
+				 * Update how long we're suppose to sleep for
+				 */
+				long newTime = this.nextHarvestMap.getNextExpire();
 				waitTime = newTime - System.currentTimeMillis() + 500;
 				waitTime = Math.max(waitTime, 500);
 			} catch (Exception e) {

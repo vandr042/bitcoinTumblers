@@ -13,6 +13,7 @@ import data.SanatizedRecord;
 
 public class BurstableHarvester implements Runnable, AddressUser {
 
+	private SanatizedRecord myRecord;
 	private Peer myTarget;
 	private AddressHarvest myParent;
 
@@ -27,7 +28,8 @@ public class BurstableHarvester implements Runnable, AddressUser {
 
 	private static final int MAX_ROUNDS = 60;
 
-	public BurstableHarvester(Peer target, AddressHarvest parent) {
+	public BurstableHarvester(SanatizedRecord myRec, Peer target, AddressHarvest parent) {
+		this.myRecord = myRec;
 		this.myTarget = target;
 		this.myParent = parent;
 
@@ -43,9 +45,9 @@ public class BurstableHarvester implements Runnable, AddressUser {
 
 	@Override
 	public void run() {
+		boolean noErrors = true;
 		this.myTarget.registerAddressConsumer(this);
-		// TODO there is an issue here where if the peer dies during this, the
-		// thread gets stuck running forever, fix that with a timeout?
+
 		try {
 			while (!this.reachedGoal()) {
 				this.roundDone++;
@@ -56,11 +58,17 @@ public class BurstableHarvester implements Runnable, AddressUser {
 				this.delays.add(endTime - startTime);
 			}
 		} catch (InterruptedException e) {
-			// TODO should prob note this
+			/*
+			 * Log the fact that this harvester was killed and then die silently
+			 */
+			this.myParent.noteKilledHarvester(this.myRecord);
+			noErrors = false;
 		}
 
-		// ET Phone Home...
-		this.myParent.reportFinishedBurst(this);
+		/*
+		 * Report results if no errors happened
+		 */
+		this.myParent.reportFinishedBurst(this, noErrors);
 	}
 
 	private boolean reachedGoal() {
@@ -71,16 +79,20 @@ public class BurstableHarvester implements Runnable, AddressUser {
 	public void getAddresses(AddressMessage m, Peer myPeer) {
 		int tempNew = 0;
 		synchronized (this) {
-			for(PeerAddress tAddr: m.getAddresses()){
-				//TODO how do we actually want to handle updated time stamps?
+			for (PeerAddress tAddr : m.getAddresses()) {
+				// TODO how do we actually want to handle updated time stamps?
 				SanatizedRecord tRec = new SanatizedRecord(tAddr);
-				if(this.responses.add(tRec)){
+				if (this.responses.add(tRec)) {
 					tempNew++;
 				}
 			}
 			this.newRecords.add(tempNew);
 			this.advance.release();
 		}
+	}
+
+	public SanatizedRecord getMyRecord() {
+		return this.myRecord;
 	}
 
 	public Peer getTarget() {
@@ -94,14 +106,14 @@ public class BurstableHarvester implements Runnable, AddressUser {
 	public List<Long> getInterMsgIntervals() {
 		return this.delays;
 	}
-	
-	public List<Integer> getNewRecordsPerRound(){
+
+	public List<Integer> getNewRecordsPerRound() {
 		return this.newRecords;
 	}
-	
-	public Long getTotalTime(){
+
+	public Long getTotalTime() {
 		long sum = 0;
-		for(Long tDelay: this.delays){
+		for (Long tDelay : this.delays) {
 			sum += tDelay;
 		}
 		return sum;
