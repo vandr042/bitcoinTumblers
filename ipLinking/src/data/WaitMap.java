@@ -67,7 +67,7 @@ public class WaitMap<E> {
 	
 	public E popNext(){
 		E holder = this.nextExpiringKey;
-		this.updateNextExpire();
+		this.deleteWait(holder);
 		return holder;
 	}
 
