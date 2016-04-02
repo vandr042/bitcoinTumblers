@@ -81,39 +81,41 @@ public class AddressHarvest implements Runnable {
 		}
 	}
 
+	/*
+	 * MUST BE CALLED IN A SYNCHRONIZED BLOCK!!!!
+	 */
 	private void startNewBurstHarvest(SanatizedRecord theRecord) {
 
-		synchronized (this) {
+		/*
+		 * Step one, sanity check that we're not already running
+		 */
+		if (!this.harvesterThreads.containsKey(theRecord)) {
+
 			/*
-			 * Step one, sanity check that we're not already running
+			 * Slightly concerned with us getting a null peer back magically, so
+			 * test and log if it happens to the exception log
 			 */
-			if (!this.harvesterThreads.containsKey(theRecord)) {
+			Peer targetPeer = this.myParent.getPeerObject(theRecord);
+			if (targetPeer != null) {
+				this.myParent.logEvent("HARVEST-START," + theRecord.toString(), Manager.DEBUG_LOG_LEVEL);
 
 				/*
-				 * Slightly concerned with us getting a null peer back
-				 * magically, so test and log if it happens to the exception log
+				 * Create the harvester thread and remember it in case we have
+				 * to interrupt it
 				 */
-				Peer targetPeer = this.myParent.getPeerObject(theRecord);
-				if (targetPeer != null) {
-					this.myParent.logEvent("HARVEST-START," + theRecord.toString(), Manager.DEBUG_LOG_LEVEL);
+				BurstableHarvester burstChild = new BurstableHarvester(theRecord, targetPeer, this);
+				Thread burstThread = new Thread(burstChild, "Burst Harvest - " + theRecord.toString());
+				this.harvesterThreads.put(theRecord, burstThread);
 
-					/*
-					 * Create the harvester thread and remember it in case we
-					 * have to interrupt it
-					 */
-					BurstableHarvester burstChild = new BurstableHarvester(theRecord, targetPeer, this);
-					Thread burstThread = new Thread(burstChild, "Burst Harvest - " + theRecord.toString());
-					this.harvesterThreads.put(theRecord, burstThread);
-
-					/*
-					 * Lastly start the harvester
-					 */
-					burstThread.start();
-				} else {
-					this.myParent.logException(new NullPointerException("Tried to start harvest, but got null peer."));
-				}
+				/*
+				 * Lastly start the harvester
+				 */
+				burstThread.start();
+			} else {
+				this.myParent.logException(new NullPointerException("Tried to start harvest, but got null peer."));
 			}
 		}
+
 	}
 
 	public void reportFinishedBurst(BurstableHarvester harv, boolean restart) {
@@ -202,9 +204,9 @@ public class AddressHarvest implements Runnable {
 						if (this.nextHarvestMap.getNextExpire() < System.currentTimeMillis()) {
 							toStart = this.nextHarvestMap.popNext();
 						}
-					}
-					if (toStart != null) {
-						this.startNewBurstHarvest(toStart);
+						if (toStart != null) {
+							this.startNewBurstHarvest(toStart);
+						}
 					}
 				} while (toStart != null);
 
