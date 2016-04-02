@@ -118,7 +118,7 @@ public class AddressHarvest implements Runnable {
 		}
 		List<Integer> newRecs = harv.getNewRecordsPerRound();
 		StringBuilder unseenStrBuild = new StringBuilder();
-		unseenStrBuild.append("unessen count ");
+		unseenStrBuild.append("unseen count ");
 		unseenStrBuild.append(harv.getTarget().getAddress().toString());
 		for(int counter = 0; counter < newRecs.size(); counter++){
 			unseenStrBuild.append(",");
