@@ -28,10 +28,18 @@ public class SanatizedRecord implements Comparable<SanatizedRecord>{
 		return this.myTS;
 	}
 	
+	public void updateTS(long newTS){
+		this.myTS = newTS;
+	}
+	
 	public boolean equals(Object rhs){
 		SanatizedRecord rhsRec = (SanatizedRecord)rhs;
 		
 		return this.myAddr.equals(rhsRec.myAddr) && this.myPort == rhsRec.myPort;
+	}
+	
+	public SanatizedRecord clone(){
+		return new SanatizedRecord(this.myAddr, this.myPort, this.myTS);
 	}
 	
 	public String toString(){
