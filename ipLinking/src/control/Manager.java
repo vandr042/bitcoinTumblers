@@ -231,7 +231,7 @@ public class Manager implements Runnable, AddressUser {
 		SanatizedRecord tRec = new SanatizedRecord(thePeer.getAddress());
 		if (this.peerObjs.remove(tRec) != null) {
 			this.addrHarvester.poisonPeer(tRec);
-			this.connTester.giveReconnectTarget(thePeer.getAddress());
+			this.connTester.giveReconnectTarget(tRec);
 		}
 	}
 
@@ -275,10 +275,14 @@ public class Manager implements Runnable, AddressUser {
 			this.records.get(incAddr).addNodeWhoKnowsMe(learnedFrom, incAddr.getTS());
 		}
 	}
+	
+	public PeerRecord getRecord(SanatizedRecord tRec){
+		return this.records.get(tRec);
+	}
 
 	public PeerRecord getRecord(PeerAddress addr) {
 		SanatizedRecord tmpRec = new SanatizedRecord(addr);
-		return this.records.get(tmpRec);
+		return this.getRecord(tmpRec);
 	}
 
 	public Peer getPeerObject(SanatizedRecord targetRecord){

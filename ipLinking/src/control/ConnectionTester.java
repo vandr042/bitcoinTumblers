@@ -5,7 +5,6 @@ import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -20,12 +19,10 @@ import com.google.common.util.concurrent.ListenableFuture;
 
 import data.PeerRecord;
 import data.SanatizedRecord;
-import data.PeerAddressTimePair;
 import listeners.ConnTestSlave;
 import listeners.DeadPeerListener;
 import listeners.VersionTestSlave;
 
-//TODO IMO since we're governed by the all might time stamp, get rid of the idea of solicited vs unsolicited
 public class ConnectionTester implements Runnable {
 
 	private Manager myParent;
@@ -35,14 +32,14 @@ public class ConnectionTester implements Runnable {
 
 	private BlockingQueue<ConnectionEvent> eventQueue;
 
-	private Set<PeerAddress> pendingTests;
+	private Set<SanatizedRecord> pendingTests;
 	private int availTests;
 
-	private PriorityBlockingQueue<PeerAddressTimePair> harvestedPeers;
-	private PriorityBlockingQueue<PeerAddressTimePair> unsolicitedPeers;
-	private int availNew;
-	private PriorityBlockingQueue<PeerAddressTimePair> disconnectedPeers;
-	private PriorityBlockingQueue<PeerAddressTimePair> retryPeers;
+	private PriorityQueue<SanatizedRecord> scheduledTestTimes;
+	private HashSet<SanatizedRecord> scheduledPeers;
+
+	private Queue<SanatizedRecord> priorityTests;
+	private HashSet<SanatizedRecord> prioritySet;
 
 	private static final int MAX_PEERS_TO_TEST = 3000;
 	private static final long RETEST_TRY_SEC = 1800;
@@ -51,7 +48,7 @@ public class ConnectionTester implements Runnable {
 	private static final long VERSION_TIMEOUT_SEC = 10;
 
 	private enum ConnectionEvent {
-		AVAILNEW, UPDATETIMER, AVAILTEST, TIMER;
+		AVAILTEST, TIMER;
 	}
 
 	public ConnectionTester(Manager parent) {
@@ -59,13 +56,14 @@ public class ConnectionTester implements Runnable {
 
 		this.eventQueue = new LinkedBlockingQueue<ConnectionEvent>();
 
-		this.harvestedPeers = new PriorityBlockingQueue<PeerAddressTimePair>();
-		this.unsolicitedPeers = new PriorityBlockingQueue<PeerAddressTimePair>();
-		this.disconnectedPeers = new PriorityBlockingQueue<PeerAddressTimePair>();
-		this.retryPeers = new PriorityBlockingQueue<PeerAddressTimePair>();
+		this.scheduledTestTimes = new PriorityQueue<SanatizedRecord>();
+		this.scheduledPeers = new HashSet<SanatizedRecord>();
 
+		this.priorityTests = new LinkedList<SanatizedRecord>();
+		this.prioritySet = new HashSet<SanatizedRecord>();
+
+		this.pendingTests = new HashSet<SanatizedRecord>();
 		this.availTests = ConnectionTester.MAX_PEERS_TO_TEST;
-		this.availNew = 0;
 
 		// TODO sanity check numbers?
 		this.connTestPool = new ThreadPoolExecutor(2, 4, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
@@ -73,27 +71,52 @@ public class ConnectionTester implements Runnable {
 		this.versionTimeoutPool = new ScheduledThreadPoolExecutor(1);
 	}
 
-	// TODO work with sanatized record more intelligently
+	/*
+	 * Should only be called the very first time we learn about a node
+	 */
 	public void giveNewNode(SanatizedRecord addr) {
-		/*
-		 * TODO check that these queues remain "sane" in size
-		 */
-		PeerAddressTimePair tmpPair = new PeerAddressTimePair(addr.getPeerAddressObject(), addr.getTS() * -1);
-		this.harvestedPeers.offer(tmpPair);
-
-		this.eventQueue.add(ConnectionEvent.AVAILNEW);
+		SanatizedRecord clonedRecord = addr.clone();
+		clonedRecord.updateTS(System.currentTimeMillis());
+		synchronized (this) {
+			if (this.scheduledPeers.contains(clonedRecord)) {
+				this.myParent.logException(new IllegalStateException("someone called giveNewNode twice!"));
+			} else {
+				this.scheduledTestTimes.add(clonedRecord);
+				this.scheduledPeers.add(clonedRecord);
+			}
+		}
+		this.eventQueue.add(ConnectionEvent.TIMER);
 	}
 
-	public void giveReconnectTarget(PeerAddress addr) {
-		this.disconnectedPeers.offer(
-				new PeerAddressTimePair(addr, System.currentTimeMillis() + ConnectionTester.RECONNECT_TRY_SEC * 1000));
-		this.eventQueue.add(ConnectionEvent.UPDATETIMER);
+	public void giveReconnectTarget(SanatizedRecord addr) {
+		/*
+		 * XXX we can run into a scenario where we connect off of a priority
+		 * test, then D/C and don't add the reconnect targe because of the
+		 * normal "we've never connected to you" test that is pending, this is
+		 * fine, because in the worst case we're delayed by one "long" reconnect
+		 * interval, but would be nice if we could update it without having to
+		 * rebuild our whole heap, but this might be rare enough where we just
+		 * rebuild the priority heap if we're really concerned
+		 */
+		SanatizedRecord cloneRecord = addr.clone();
+		cloneRecord.updateTS(System.currentTimeMillis() + ConnectionTester.RECONNECT_TRY_SEC * 1000);
+		synchronized (this) {
+			if (!this.scheduledPeers.contains(cloneRecord)) {
+				this.scheduledTestTimes.add(cloneRecord);
+				this.scheduledPeers.add(cloneRecord);
+			}
+		}
+		this.eventQueue.add(ConnectionEvent.TIMER);
 	}
 
 	public void givePriorityConnectTarget(SanatizedRecord addr) {
-		PeerAddressTimePair tmpPair = new PeerAddressTimePair(addr.getPeerAddressObject(), addr.getTS() * -1);
-		this.unsolicitedPeers.offer(tmpPair);
-		this.eventQueue.add(ConnectionEvent.AVAILNEW);
+		synchronized (this) {
+			if (!this.prioritySet.contains(addr) && !this.pendingTests.contains(addr)) {
+				this.priorityTests.add(addr);
+				this.prioritySet.add(addr);
+			}
+		}
+		this.eventQueue.add(ConnectionEvent.TIMER);
 	}
 
 	public void run() {
@@ -110,60 +133,46 @@ public class ConnectionTester implements Runnable {
 				 * event (only way to get test slots).
 				 */
 				long nextWait = this.computeNextWaitTime();
-				ConnectionEvent nextEvent = null;
-				if (nextWait <= 0) {
-					nextEvent = this.eventQueue.take();
-				} else {
-					nextEvent = this.eventQueue.poll(nextWait, TimeUnit.MILLISECONDS);
-					if (nextEvent == null) {
-						nextEvent = ConnectionEvent.TIMER;
-					}
+				ConnectionEvent nextEvent = this.eventQueue.poll(nextWait, TimeUnit.MILLISECONDS);
+				if (nextEvent == null) {
+					nextEvent = ConnectionEvent.TIMER;
 				}
 
 				/*
 				 * If the event results in a counter getting updated do so
 				 */
-				if (nextEvent.equals(ConnectionEvent.AVAILNEW)) {
-					this.availNew++;
-				} else if (nextEvent.equals(ConnectionEvent.AVAILTEST)) {
+				if (nextEvent.equals(ConnectionEvent.AVAILTEST)) {
 					this.availTests++;
 				}
 
-				/*
-				 * check if we have avail reconnect attempts and open test
-				 * slots, spin them up so long as we have both of these
-				 * resources
-				 */
-				this.drainQueue(this.disconnectedPeers);
-
-				/*
-				 * Check if we have avail "untested" nodes
-				 */
-				while (this.availTests > 0 && this.availNew > 0) {
+				synchronized (this) {
 					/*
-					 * Get an available new test, update counter
+					 * Check if we have avail "untested" nodes
 					 */
-					PeerAddressTimePair testPull = this.unsolicitedPeers.poll();
-					if (testPull == null) {
-						testPull = this.harvestedPeers.poll();
-					}
-					if (testPull == null) {
-						throw new RuntimeException("There should have been an object in those queues.");
-					}
-					this.availNew--;
+					while (this.availTests > 0) {
+						SanatizedRecord toTest = null;
 
-					/*
-					 * Try and start the test
-					 */
-					this.startTest(testPull.getAddress());
+						if (!this.priorityTests.isEmpty()) {
+							toTest = this.priorityTests.poll();
+							this.prioritySet.remove(toTest);
+						} else if (!this.scheduledTestTimes.isEmpty()) {
+							if (this.scheduledTestTimes.peek().getTS() <= System.currentTimeMillis()) {
+								toTest = this.scheduledTestTimes.poll();
+								this.scheduledPeers.remove(toTest);
+							}
+						}
+
+						if (toTest == null) {
+							/*
+							 * We failed to find a suitable test, exit the loop
+							 * even though we have tests
+							 */
+							break;
+						} else {
+							this.startTest(toTest);
+						}
+					}
 				}
-
-				/*
-				 * check if we have avail test slots and if we have a valid
-				 * retry node
-				 */
-				this.drainQueue(this.retryPeers);
-
 			} catch (Exception e) {
 				this.myParent.logException(e);
 			}
@@ -171,64 +180,50 @@ public class ConnectionTester implements Runnable {
 
 	}
 
-	/*
-	 * Drains one of the timer based queues
-	 */
-	private void drainQueue(PriorityBlockingQueue<PeerAddressTimePair> queueToDrain) {
-		while (this.availTests > 0 && !queueToDrain.isEmpty()) {
-			long ts = queueToDrain.peek().getTime();
-			if (ts <= System.currentTimeMillis()) {
-				PeerAddress tAddr = queueToDrain.poll().getAddress();
-				this.startTest(tAddr);
-			} else {
-				break;
-			}
-		}
-	}
-
 	private long computeNextWaitTime() {
 		long shortestTime = Long.MAX_VALUE;
-		if (!this.retryPeers.isEmpty()) {
-			if (this.retryPeers.peek().getTime() < shortestTime) {
-				shortestTime = this.retryPeers.peek().getTime();
-			}
-		}
-		if (!this.disconnectedPeers.isEmpty()) {
-			if (this.disconnectedPeers.peek().getTime() < shortestTime) {
-				shortestTime = this.disconnectedPeers.peek().getTime();
+
+		synchronized (this) {
+			if (!this.scheduledTestTimes.isEmpty()) {
+				shortestTime = this.scheduledTestTimes.peek().getTS();
 			}
 		}
 
-		if (shortestTime == Long.MAX_VALUE) {
-			return 0;
-		}
-
-		return shortestTime - System.currentTimeMillis();
+		long wait = shortestTime - System.currentTimeMillis() + 500;
+		return Math.max(wait, 500);
 	}
 
-	private boolean startTest(PeerAddress toTest) {
+	/*
+	 * THIS MUST BE CALLED FROM INSIDE A SYNCHRNOZIED(THIS) BLOCK
+	 */
+	private boolean startTest(SanatizedRecord toTest) {
+		if (this.pendingTests.contains(toTest)) {
+			return false;
+		}
+
 		PeerRecord tRecord = null;
 		while (tRecord == null) {
 			tRecord = this.myParent.getRecord(toTest);
 		}
 
-		long lastFail = tRecord.getTimeConnFailed();
-		if (lastFail != -1 && (System.currentTimeMillis() - lastFail) < (ConnectionTester.RETEST_TRY_SEC * 1000)) {
-			return false;
-		}
+		/*
+		 * XXX LOG IF WE'RE TRYING ADDERS TOO FAST?
+		 */
 
 		if (tRecord.attemptConnectionStart()) {
+			this.pendingTests.add(toTest);
 			this.availTests--;
 
 			/*
 			 * Actually spin the test up
 			 */
-			Peer peerObj = new Peer(this.myParent.getParams(), new VersionMessage(this.myParent.getParams(), 0), toTest,
-					null, false);
+			PeerAddress addrObj = toTest.getPeerAddressObject();
+			Peer peerObj = new Peer(this.myParent.getParams(), new VersionMessage(this.myParent.getParams(), 0),
+					addrObj, null, false);
 			peerObj.registerAddressConsumer(this.myParent);
 			ConnTestSlave testSlave = new ConnTestSlave(peerObj, this);
 			ListenableFuture<SocketAddress> connFuture = this.myParent.getRandomNIOClient()
-					.openConnection(toTest.getSocketAddress(), peerObj);
+					.openConnection(addrObj.getSocketAddress(), peerObj);
 			Futures.addCallback(connFuture, testSlave, this.connTestPool);
 			return true;
 
@@ -244,30 +239,44 @@ public class ConnectionTester implements Runnable {
 		}
 	}
 
-	public void reportTCPFailure(Peer failedPeer, String reason) {
-
+	private void handleFailedTest(SanatizedRecord failed, String reason, String message) {
 		/*
 		 * Record the failure time and remove pending test
 		 */
-		PeerRecord theRec = this.myParent.getRecord(failedPeer.getAddress());
-		theRec.signalConnectionFailed();
-		long delay = -1;
-		if (theRec.isOrHasEverConnected()) {
-			delay = ConnectionTester.RECONNECT_TRY_SEC;
-		} else {
-			delay = ConnectionTester.RETEST_TRY_SEC;
+		PeerRecord theRec = this.myParent.getRecord(failed);
+		synchronized (this) {
+			theRec.signalConnectionFailed();
+			this.pendingTests.remove(failed);
+			if (!this.scheduledPeers.contains(failed)) {
+				/*
+				 * Figure out what our delay should be
+				 */
+				long delay = -1;
+				if (theRec.isOrHasEverConnected()) {
+					delay = ConnectionTester.RECONNECT_TRY_SEC;
+				} else {
+					delay = ConnectionTester.RETEST_TRY_SEC;
+				}
+				failed.updateTS(System.currentTimeMillis() + delay * 1000);
+
+				/*
+				 * Actually reschedule the next test
+				 */
+				this.scheduledPeers.add(failed);
+				this.scheduledTestTimes.add(failed);
+			}
 		}
-		this.retryPeers
-				.add(new PeerAddressTimePair(failedPeer.getAddress(), System.currentTimeMillis() + delay * 1000));
-		this.myParent.logEvent("tcpfailed " + failedPeer.getAddress().toString() + " - " + reason,
-				Manager.DEBUG_LOG_LEVEL);
+		this.myParent.logEvent(message + "," + failed.toString() + "," + reason, Manager.DEBUG_LOG_LEVEL);
 
 		/*
-		 * We have a new retest option AND an open test slot, pair of events
-		 * gogo
+		 * Report the open test slot
 		 */
-		this.eventQueue.add(ConnectionEvent.UPDATETIMER);
 		this.eventQueue.add(ConnectionEvent.AVAILTEST);
+	}
+
+	public void reportTCPFailure(Peer failedPeer, String reason) {
+		SanatizedRecord failed = new SanatizedRecord(failedPeer.getAddress());
+		this.handleFailedTest(failed, reason, "tcpfailed");
 	}
 
 	public void reportTCPSuccess(Peer connPeer) {
@@ -288,37 +297,24 @@ public class ConnectionTester implements Runnable {
 		/*
 		 * Record the failure time and remove pending test
 		 */
-		PeerRecord tRec = this.myParent.getRecord(failedPeer.getAddress());
-		tRec.signalConnectionFailed();
-		long delay = -1;
-		if (tRec.isOrHasEverConnected()) {
-			delay = ConnectionTester.RECONNECT_TRY_SEC;
-		} else {
-			delay = ConnectionTester.RETEST_TRY_SEC;
-		}
-		this.retryPeers
-				.add(new PeerAddressTimePair(failedPeer.getAddress(), System.currentTimeMillis() + delay * 1000));
-		this.myParent.logEvent("versionfailed " + failedPeer.getAddress().toString() + " - " + reason,
-				Manager.DEBUG_LOG_LEVEL);
-
-		/*
-		 * We have a new retest option AND an open test slot, pair of events
-		 * gogo
-		 */
-		this.eventQueue.add(ConnectionEvent.UPDATETIMER);
-		this.eventQueue.add(ConnectionEvent.AVAILTEST);
+		SanatizedRecord failed = new SanatizedRecord(failedPeer.getAddress());
+		this.handleFailedTest(failed, reason, "versionfailed");
 	}
 
 	public void reportWorkingPeer(Peer workingPeer) {
 
-		this.myParent.getRecord(workingPeer.getAddress()).signalConnected();
+		SanatizedRecord tRec = new SanatizedRecord(workingPeer.getAddress());
+		this.myParent.getRecord(tRec).signalConnected();
+		synchronized (this) {
+			this.pendingTests.remove(tRec);
+		}
 
 		// TODO should this have a thread pool/executor?
 		workingPeer.addConnectionEventListener(new DeadPeerListener(this.myParent));
 
 		this.myParent.resolvedStartedPeer(workingPeer);
 
-		this.myParent.logEvent("conn," + workingPeer.getAddress().toString(), Manager.CRIT_LOG_LEVEL);
+		this.myParent.logEvent("conn," + tRec.toString(), Manager.CRIT_LOG_LEVEL);
 		this.eventQueue.add(ConnectionEvent.AVAILTEST);
 	}
 }
