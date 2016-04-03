@@ -47,6 +47,8 @@ public class ConnectionTester implements Runnable {
 
 	private static final long VERSION_TIMEOUT_SEC = 10;
 
+	private static final long INTERESTING_WINDOW_SEC = 24 * 3600;
+
 	private enum ConnectionEvent {
 		AVAILTEST, TIMER;
 	}
@@ -71,6 +73,12 @@ public class ConnectionTester implements Runnable {
 		this.versionTimeoutPool = new ScheduledThreadPoolExecutor(1);
 	}
 
+	// XXX do we want to worry about nodes in the "future" or clock skew?
+	public boolean shouldIntroduce(long netTimestamp) {
+		long now = System.currentTimeMillis() / 1000;
+		return now - netTimestamp > ConnectionTester.INTERESTING_WINDOW_SEC;
+	}
+
 	/*
 	 * Should only be called the very first time we learn about a node
 	 */
@@ -79,13 +87,17 @@ public class ConnectionTester implements Runnable {
 		clonedRecord.updateTS(System.currentTimeMillis());
 		synchronized (this) {
 			if (this.scheduledPeers.contains(clonedRecord)) {
+				/*
+				 * XXX there are a few race conditions where I think this could
+				 * happen
+				 */
 				this.myParent.logException(new IllegalStateException("someone called giveNewNode twice!"));
 			} else {
 				this.scheduledTestTimes.add(clonedRecord);
 				this.scheduledPeers.add(clonedRecord);
+				this.eventQueue.add(ConnectionEvent.TIMER);
 			}
 		}
-		this.eventQueue.add(ConnectionEvent.TIMER);
 	}
 
 	public void giveReconnectTarget(SanatizedRecord addr) {
@@ -104,9 +116,9 @@ public class ConnectionTester implements Runnable {
 			if (!this.scheduledPeers.contains(cloneRecord)) {
 				this.scheduledTestTimes.add(cloneRecord);
 				this.scheduledPeers.add(cloneRecord);
+				this.eventQueue.add(ConnectionEvent.TIMER);
 			}
 		}
-		this.eventQueue.add(ConnectionEvent.TIMER);
 	}
 
 	public void givePriorityConnectTarget(SanatizedRecord addr) {
@@ -114,9 +126,9 @@ public class ConnectionTester implements Runnable {
 			if (!this.prioritySet.contains(addr) && !this.pendingTests.contains(addr)) {
 				this.priorityTests.add(addr);
 				this.prioritySet.add(addr);
+				this.eventQueue.add(ConnectionEvent.TIMER);
 			}
 		}
-		this.eventQueue.add(ConnectionEvent.TIMER);
 	}
 
 	public void run() {
@@ -234,8 +246,9 @@ public class ConnectionTester implements Runnable {
 	}
 
 	public void logSummary() {
-		synchronized (this.pendingTests) {
-			this.myParent.logEvent("conn tests pending: " + this.pendingTests.size(), Manager.DEBUG_LOG_LEVEL);
+		synchronized (this) {
+			this.myParent.logEvent("CONNSTATUS," + this.pendingTests.size() + "," + this.priorityTests.size() + ","
+					+ this.scheduledPeers.size(), Manager.DEBUG_LOG_LEVEL);
 		}
 	}
 

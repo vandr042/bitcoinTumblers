@@ -72,7 +72,7 @@ public class Manager implements Runnable, AddressUser {
 		 * Build the params and context objects which are needed by other data
 		 * structures.
 		 */
-        BriefLogFormatter.init();
+		BriefLogFormatter.init();
 		this.params = MainNetParams.get();
 		this.bcjContext = new Context(params);
 		Peer.lobotomizeMe();
@@ -161,7 +161,7 @@ public class Manager implements Runnable, AddressUser {
 		 * Actually boot off of our starting list
 		 */
 		for (PeerAddress tPeer : startingList) {
-			this.possiblyLearnPeer(new SanatizedRecord(tPeer), null);
+			this.handleAddressNotificiation(new SanatizedRecord(tPeer), null);
 		}
 	}
 
@@ -196,29 +196,6 @@ public class Manager implements Runnable, AddressUser {
 	public void logException(Exception errMsg) {
 		this.exceptionLog.writeOrDie(
 				Manager.getTimestamp() + "," + errMsg.getMessage() + "," + errMsg.getStackTrace()[0].toString() + "\n");
-	}
-
-	public boolean possiblyLearnPeer(SanatizedRecord learnedPeer, SanatizedRecord learnedFrom) {
-		boolean returnFlag = false;
-
-		/*
-		 * XXX super tiny race condition could cause node to not get credited
-		 * with going into unsolicitied queue, but still ends up in harvested to
-		 * queue so not that big of a deal IMO
-		 */
-		synchronized (this.records) {
-			if (!this.records.containsKey(learnedPeer)) {
-				PeerRecord newRecord = new PeerRecord(learnedPeer, this);
-				this.records.put(learnedPeer, newRecord);
-				returnFlag = true;
-				this.connTester.giveNewNode(learnedPeer);
-			}
-		}
-		if (learnedFrom != null) {
-			this.records.get(learnedPeer).addNodeWhoKnowsMe(learnedFrom, learnedPeer.getTS());
-		}
-
-		return returnFlag;
 	}
 
 	public void resolvedStartedPeer(Peer thePeer) {
@@ -269,14 +246,38 @@ public class Manager implements Runnable, AddressUser {
 	}
 
 	private void handleAddressNotificiation(SanatizedRecord incAddr, SanatizedRecord learnedFrom) {
+		PeerRecord theRecord = null;
 		if (!this.records.containsKey(incAddr)) {
-			this.possiblyLearnPeer(incAddr, learnedFrom);
+			synchronized (this.records) {
+				if (!this.records.containsKey(incAddr)) {
+					theRecord = new PeerRecord(incAddr, this);
+					this.records.put(incAddr, theRecord);
+				} else {
+					theRecord = this.records.get(incAddr);
+				}
+			}
 		} else {
+			theRecord = this.records.get(incAddr);
+		}
+
+		/*
+		 * If this carries a time stamp, do some updating
+		 */
+		boolean introduce = learnedFrom == null;
+		if (learnedFrom != null) {
 			this.records.get(incAddr).addNodeWhoKnowsMe(learnedFrom, incAddr.getTS());
+			if(!theRecord.connTesterKnows()){
+				introduce = this.connTester.shouldIntroduce(incAddr.getTS());
+			}
+		}
+		
+		if(!theRecord.connTesterKnows() && introduce){
+			this.connTester.giveNewNode(incAddr);
+			theRecord.flagAsPassedToConnTester();
 		}
 	}
-	
-	public PeerRecord getRecord(SanatizedRecord tRec){
+
+	public PeerRecord getRecord(SanatizedRecord tRec) {
 		return this.records.get(tRec);
 	}
 
@@ -285,10 +286,10 @@ public class Manager implements Runnable, AddressUser {
 		return this.getRecord(tmpRec);
 	}
 
-	public Peer getPeerObject(SanatizedRecord targetRecord){
+	public Peer getPeerObject(SanatizedRecord targetRecord) {
 		return this.peerObjs.get(targetRecord);
 	}
-	
+
 	public NioClientManager getRandomNIOClient() {
 		int slot = Manager.insecureRandom.nextInt(Manager.NIO_CLIENT_MGER_COUNT);
 		return this.nioManagers[slot];
@@ -408,6 +409,7 @@ public class Manager implements Runnable, AddressUser {
 
 			this.logEvent("total known nodes " + this.records.size(), Manager.CRIT_LOG_LEVEL);
 			this.logEvent("active connections " + sum + "(" + Arrays.toString(counts) + ")", Manager.CRIT_LOG_LEVEL);
+			this.connTester.logSummary();
 			/*
 			 * Force the cleaning up of useless arrays every little bit
 			 */
