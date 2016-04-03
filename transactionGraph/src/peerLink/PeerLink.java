@@ -12,6 +12,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.*;
 
@@ -112,7 +113,7 @@ public class PeerLink {
 	
 	
 	
-	/*
+	/**
 	 * computeMostCommonPeers computes the peer who the greatest number of peers said they heard about the transaction from in the list given, up to a certain timestamp.
 	 * \param peers is a sorted LinkedList of TStampPeerPairs
 	 * \param tStampDepth is a maximum time stamp for which to compute the most common peers
@@ -120,7 +121,7 @@ public class PeerLink {
 	 */
 	private HashMap<String,HashSet<String>> computeMostCommonPeers(LinkedList<TStampPeerPair>  peers, int tStampDepth){
 		int tStampsDeep;
-		LinkedList<PeerCountPair> pcpList;			// List private peers and the number of times they are seen			
+		List<PeerCountPair> pcpList;			// List private peers and the number of times they are seen			
 		HashMap<String, Integer> peerSeenCount; 	// Map of peers to times seen in order to implement counting
 		LinkedList<String> mostCommonPeers;			// This is a list of the most common peers
 		HashMap<String, HashSet<String>> mcpSeenBy; // map from the most common peers to a set of the peers who said they saw them
@@ -134,31 +135,29 @@ public class PeerLink {
 		 * Populate peerSeenCount with peers and the number of times 
 		 * they are seen in peerConn sets. 
 		 **************************************************************/
-		while(tStampsDeep < tStampDepth){
-			long currTstamp,lastTstamp;
-			TStampPeerPair tspp = peers.get(0);	
-			String peer = tspp.getPeer();
-			lastTstamp = tspp.getTimeStamp();
-			currTstamp = tspp.getTimeStamp();
-	
-			for(int i = 1; i < peers.size(); i++){
-				if (currTstamp > lastTstamp)
-					tStampsDeep++;
-				lastTstamp = currTstamp;
-				HashSet<String> peerConns = this.pMap.get(peer);
-				for(String p:peerConns){
-					if (peerSeenCount.get(p) == null)
-						peerSeenCount.put(p, 1);
-					else{
-						int count = peerSeenCount.get(p);
-						peerSeenCount.put(p, count + 1);
-					}
-					tspp = peers.get(i);
-					peer = tspp.getPeer();
-					currTstamp = tspp.getTimeStamp();
+		long currTstamp,lastTstamp;
+		TStampPeerPair ttspp = peers.get(0);	
+		String tpeer = ttspp.getPeer();
+		lastTstamp = ttspp.getTimeStamp();
+		currTstamp = ttspp.getTimeStamp();
+		int i = 1;
+		while(tStampsDeep < tStampDepth && i < peers.size()){
+			if (currTstamp > lastTstamp)
+				tStampsDeep++;
+			lastTstamp = currTstamp;
+			HashSet<String> peerConns = this.pMap.get(tpeer);
+			for(String p:peerConns){
+				if (peerSeenCount.get(p) == null)
+					peerSeenCount.put(p, 1);
+				else{
+					int count = peerSeenCount.get(p);
+					peerSeenCount.put(p, count + 1);
 				}
+				ttspp = peers.get(i);
+				tpeer = ttspp.getPeer();
+				currTstamp = ttspp.getTimeStamp();
 			}
-			break;
+			i++;
 		}//end while
 		/*************************************************************/
 		
@@ -179,9 +178,13 @@ public class PeerLink {
 		highCount = currCount = pcpList.get(0).getCount();
 		while (currCount == highCount){
 			j++;
-			currCount = pcpList.get(j).getCount();
+			try{
+				currCount = pcpList.get(j).getCount();
+			}catch(IndexOutOfBoundsException e){
+				break;
+			}
 		}
-		pcpList = (LinkedList<PeerCountPair>) pcpList.subList(0, j);
+		pcpList = pcpList.subList(0, j);
 		mostCommonPeers = new LinkedList<String>();
 		for (PeerCountPair pcp:pcpList){
 			String peer = pcp.getPeer();
@@ -198,8 +201,8 @@ public class PeerLink {
 		mcpSeenBy = new HashMap<String,HashSet<String>>();
 		for (String mcp: mostCommonPeers){
 			HashSet<String> seenBy = new HashSet<String>();	//set of peers a given peer was seen by
-			for (int i = 0; i < peers.size(); i++){
-				TStampPeerPair  tspp = peers.get(i);
+			for (int k = 0; k < peers.size(); k++){
+				TStampPeerPair  tspp = peers.get(k);
 				String peer = tspp.getPeer();
 				HashSet<String> peerConns = pMap.get(peer);
 				if (peerConns.contains(mcp)){

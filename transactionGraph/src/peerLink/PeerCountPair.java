@@ -27,12 +27,13 @@ public class PeerCountPair implements Comparable<PeerCountPair>{
 	}
 
 	@Override
+	/* This logic is backwards (returns -1 when this objects count is greater) in order to make Collection.sort() sort in descending order */
 	public int compareTo(PeerCountPair pcp) {
 		int otherCount = pcp.getCount();
 		if (seenCount > otherCount)
-			return 1;
-		else if (seenCount < otherCount)
 			return -1;
+		else if (seenCount < otherCount)
+			return 1;
 		return 0;
 	}
 
