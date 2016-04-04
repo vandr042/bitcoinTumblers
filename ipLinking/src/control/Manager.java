@@ -90,8 +90,8 @@ public class Manager implements Runnable, AddressUser {
 		this.runLog = new ThreadedWriter(logName, true);
 		this.exceptionLog = new ThreadedWriter(logName + "-err", true);
 		this.myLogLevel = Manager.DEBUG_LOG_LEVEL;
-		Thread loggingThread = new Thread(this.runLog);
-		Thread exceptionThread = new Thread(this.exceptionLog);
+		Thread loggingThread = new Thread(this.runLog, "general-logging");
+		Thread exceptionThread = new Thread(this.exceptionLog, "exception-logging");
 		loggingThread.setName("Logging thread.");
 		exceptionThread.setName("Exception logging thread");
 		loggingThread.setDaemon(true);
@@ -119,7 +119,7 @@ public class Manager implements Runnable, AddressUser {
 		 * Start ze address harvester
 		 */
 		this.addrHarvester = new AddressHarvest(this);
-		Thread harvestThread = new Thread(this.addrHarvester);
+		Thread harvestThread = new Thread(this.addrHarvester, "Address Harvest Master");
 		harvestThread.setDaemon(true);
 		harvestThread.start();
 
@@ -129,7 +129,7 @@ public class Manager implements Runnable, AddressUser {
 		 */
 		this.connTester = new ConnectionTester(this);
 		Thread connTestThread = new Thread(this.connTester);
-		connTestThread.setName("Connection tester master");
+		connTestThread.setName("Connection Tester Master");
 		connTestThread.start();
 
 		/*
