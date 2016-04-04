@@ -44,7 +44,7 @@ public class SanatizedRecord implements Comparable<SanatizedRecord>{
 	
 	public String toString(){
 		//TODO make this not include dns name
-		return this.myAddr.toString() + ":" + this.myPort;
+		return this.myAddr.getHostAddress() + ":" + this.myPort;
 	}
 	
 	public int hashCode(){
@@ -59,6 +59,14 @@ public class SanatizedRecord implements Comparable<SanatizedRecord>{
 		} else{
 			return 1;
 		}
+	}
+	
+	public static void main(String[] args) throws Exception{
+		SanatizedRecord a = new SanatizedRecord(InetAddress.getByName("1.2.3.4"), 8333, 0);
+		SanatizedRecord b = new SanatizedRecord(InetAddress.getByName("1.2.3.4"), 8333, 10);
+		System.out.println(a.equals(b));
+		System.out.println(a.hashCode());
+		System.out.println(b.hashCode());
 	}
 	
 }
