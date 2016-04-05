@@ -6,7 +6,6 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.LinkedList;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.io.*;
 
@@ -34,13 +33,14 @@ import logging.ThreadedWriter;
 
 public class Manager implements Runnable, AddressUser {
 
-	private NetworkParameters params;
+	@SuppressWarnings("unused")
 	private Context bcjContext;
+	private NetworkParameters params;
 
 	private NioClientManager[] nioManagers;
 
-	private ConcurrentHashMap<SanatizedRecord, PeerRecord> records;
-	private ConcurrentHashMap<SanatizedRecord, Peer> peerObjs;
+	private HashMap<SanatizedRecord, PeerRecord> records;
+	private HashMap<SanatizedRecord, Peer> peerObjs;
 
 	private ConnectionTester connTester;
 	private AddressHarvest addrHarvester;
@@ -62,7 +62,7 @@ public class Manager implements Runnable, AddressUser {
 	public static final int CRIT_LOG_LEVEL = 2;
 	public static final int DEBUG_LOG_LEVEL = 3;
 
-	private static final long INT_WINDOW_SEC = 4500;
+	public static final long INT_WINDOW_SEC = 4500;
 
 	private static final boolean BULKY_STATUS = false;
 	private static final boolean HUMAN_READABLE_DATE = false;
@@ -80,8 +80,8 @@ public class Manager implements Runnable, AddressUser {
 		/*
 		 * Internal data structures
 		 */
-		this.records = new ConcurrentHashMap<SanatizedRecord, PeerRecord>();
-		this.peerObjs = new ConcurrentHashMap<SanatizedRecord, Peer>();
+		this.records = new HashMap<SanatizedRecord, PeerRecord>();
+		this.peerObjs = new HashMap<SanatizedRecord, Peer>();
 
 		/*
 		 * Logging
@@ -149,7 +149,7 @@ public class Manager implements Runnable, AddressUser {
 			for (String tStr : recoverySet) {
 				String[] tokens = tStr.split(":");
 				try {
-					startingList.add(new PeerAddress(InetAddress.getByName(tokens[0].split("/")[1]),
+					startingList.add(new PeerAddress(InetAddress.getByName(tokens[0]),
 							Integer.parseInt(tokens[1])));
 				} catch (Exception e) {
 					this.logException(e);
@@ -193,20 +193,26 @@ public class Manager implements Runnable, AddressUser {
 		}
 	}
 
-	public void logException(Exception errMsg) {
+	public void logException(Throwable errMsg) {
 		this.exceptionLog.writeOrDie(
 				Manager.getTimestamp() + "," + errMsg.getMessage() + "," + errMsg.getStackTrace()[0].toString() + "\n");
 	}
 
 	public void resolvedStartedPeer(Peer thePeer) {
 		SanatizedRecord myRecord = new SanatizedRecord(thePeer.getAddress());
+		synchronized (this.peerObjs) {
+			this.peerObjs.put(myRecord, thePeer);
+		}
 		this.addrHarvester.giveNewHarvestTarget(myRecord, true);
-		this.peerObjs.put(myRecord, thePeer);
 	}
 
 	public void cleanupDeadPeer(Peer thePeer) {
 		SanatizedRecord tRec = new SanatizedRecord(thePeer.getAddress());
-		if (this.peerObjs.remove(tRec) != null) {
+		boolean actuallyRemoved = false;
+		synchronized (this.peerObjs) {
+			actuallyRemoved = this.peerObjs.remove(tRec) != null;
+		}
+		if (actuallyRemoved) {
 			this.addrHarvester.poisonPeer(tRec);
 			this.connTester.giveReconnectTarget(tRec);
 		}
@@ -235,50 +241,51 @@ public class Manager implements Runnable, AddressUser {
 		 */
 		for (PeerAddress tAddr : harvestedAddrs) {
 			SanatizedRecord incPeer = new SanatizedRecord(tAddr);
+			this.handleAddressNotificiation(incPeer, fromPeer);
 			if (actuallyUnsolAddr) {
 				this.logEvent(
 						"ANNOUNCED," + incPeer.toString() + ",from," + fromPeer.toString() + "," + incPeer.getTS(),
 						Manager.CRIT_LOG_LEVEL);
 				this.connTester.givePriorityConnectTarget(incPeer);
 			}
-			this.handleAddressNotificiation(incPeer, fromPeer);
 		}
 	}
 
 	private void handleAddressNotificiation(SanatizedRecord incAddr, SanatizedRecord learnedFrom) {
 		PeerRecord theRecord = null;
-		if (!this.records.containsKey(incAddr)) {
-			synchronized (this.records) {
-				if (!this.records.containsKey(incAddr)) {
-					theRecord = new PeerRecord(incAddr, this);
-					this.records.put(incAddr, theRecord);
-				} else {
-					theRecord = this.records.get(incAddr);
-				}
+
+		synchronized (this.records) {
+			if (!this.records.containsKey(incAddr)) {
+				theRecord = new PeerRecord(incAddr, this);
+				this.records.put(incAddr, theRecord);
+			} else {
+				theRecord = this.records.get(incAddr);
 			}
-		} else {
-			theRecord = this.records.get(incAddr);
 		}
 
 		/*
 		 * If this carries a time stamp, do some updating
 		 */
-		boolean introduce = learnedFrom == null;
+		boolean introduce = false;
 		if (learnedFrom != null) {
-			this.records.get(incAddr).addNodeWhoKnowsMe(learnedFrom, incAddr.getTS());
-			if(!theRecord.connTesterKnows()){
-				introduce = this.connTester.shouldIntroduce(incAddr.getTS());
-			}
+			theRecord.addNodeWhoKnowsMe(learnedFrom, incAddr.getTS());
+			introduce = theRecord.shouldIntroduce(incAddr.getTS());
+		} else {
+			introduce = true;
+			theRecord.setAsIntroduced();
 		}
-		
-		if(!theRecord.connTesterKnows() && introduce){
+
+		if (introduce) {
 			this.connTester.giveNewNode(incAddr);
-			theRecord.flagAsPassedToConnTester();
 		}
 	}
 
 	public PeerRecord getRecord(SanatizedRecord tRec) {
-		return this.records.get(tRec);
+		PeerRecord retValue = null;
+		synchronized (this.records) {
+			retValue = this.records.get(tRec);
+		}
+		return retValue;
 	}
 
 	public PeerRecord getRecord(PeerAddress addr) {
@@ -286,8 +293,30 @@ public class Manager implements Runnable, AddressUser {
 		return this.getRecord(tmpRec);
 	}
 
+	@SuppressWarnings("unchecked")
+	public HashMap<SanatizedRecord, PeerRecord> getCopyOfRecords() {
+		HashMap<SanatizedRecord, PeerRecord> copyOfState = null;
+		synchronized (this.records) {
+			copyOfState = (HashMap<SanatizedRecord, PeerRecord>) this.records.clone();
+		}
+		return copyOfState;
+	}
+
 	public Peer getPeerObject(SanatizedRecord targetRecord) {
-		return this.peerObjs.get(targetRecord);
+		Peer retPeer = null;
+		synchronized (this.peerObjs) {
+			retPeer = this.peerObjs.get(targetRecord);
+		}
+		return retPeer;
+	}
+
+	@SuppressWarnings("unchecked")
+	public HashMap<SanatizedRecord, Peer> getCopyOfPeerMap() {
+		HashMap<SanatizedRecord, Peer> retMap = null;
+		synchronized (this.peerObjs) {
+			retMap = (HashMap<SanatizedRecord, Peer>) this.peerObjs.clone();
+		}
+		return retMap;
 	}
 
 	public NioClientManager getRandomNIOClient() {
@@ -312,9 +341,10 @@ public class Manager implements Runnable, AddressUser {
 	}
 
 	public void dumpRespondingNodes(String file) {
+		HashMap<SanatizedRecord, PeerRecord> copyOfState = this.getCopyOfRecords();
 		try {
 			BufferedWriter outBuffer = new BufferedWriter(new FileWriter(file));
-			for (PeerRecord tRecord : this.records.values()) {
+			for (PeerRecord tRecord : copyOfState.values()) {
 				long tempUp = tRecord.getLastUptime();
 				if (tempUp != 0) {
 					outBuffer.write(tRecord.getMyAddr().toString() + "," + tempUp + ","
@@ -328,9 +358,10 @@ public class Manager implements Runnable, AddressUser {
 	}
 
 	public void dumpKnowledge(String file) {
+		HashMap<SanatizedRecord, PeerRecord> copyOfState = this.getCopyOfRecords();
 		try {
 			BufferedWriter outBuffer = new BufferedWriter(new FileWriter(file));
-			for (PeerRecord tRecord : this.records.values()) {
+			for (PeerRecord tRecord : copyOfState.values()) {
 				HashMap<SanatizedRecord, Long> freshMap = tRecord.getCopyOfNodesWhoKnow();
 				outBuffer.write("***," + tRecord.getMyAddr().toString() + "\n");
 				for (SanatizedRecord tKnowingPeer : freshMap.keySet()) {
@@ -346,8 +377,9 @@ public class Manager implements Runnable, AddressUser {
 	public void dumpTimeSkew(String file) {
 		try {
 			BufferedWriter outBuffer = new BufferedWriter(new FileWriter(file));
-			for (SanatizedRecord tAddr : this.peerObjs.keySet()) {
-				Peer tPeer = this.peerObjs.get(tAddr);
+			HashMap<SanatizedRecord, Peer> copyOfPeerMap = this.getCopyOfPeerMap();
+			for (SanatizedRecord tAddr : copyOfPeerMap.keySet()) {
+				Peer tPeer = copyOfPeerMap.get(tAddr);
 				if (tPeer != null) {
 					outBuffer.write(tAddr + "," + tPeer.getClockSkewGuess() + "\n");
 				}
@@ -374,7 +406,8 @@ public class Manager implements Runnable, AddressUser {
 		File currentRecFile = new File(baseDir, file + "-recovery");
 		try {
 			BufferedWriter outBuff = new BufferedWriter(new FileWriter(currentRecFile));
-			for (SanatizedRecord tRec : this.peerObjs.keySet()) {
+			HashMap<SanatizedRecord, Peer> copyOfPeerMap = this.getCopyOfPeerMap();
+			for (SanatizedRecord tRec : copyOfPeerMap.keySet()) {
 				outBuff.write(tRec.toString() + "\n");
 			}
 			outBuff.close();
@@ -407,7 +440,9 @@ public class Manager implements Runnable, AddressUser {
 				sum += tCount;
 			}
 
-			this.logEvent("total known nodes " + this.records.size(), Manager.CRIT_LOG_LEVEL);
+			synchronized (this.records) {
+				this.logEvent("total known nodes " + this.records.size(), Manager.CRIT_LOG_LEVEL);
+			}
 			this.logEvent("active connections " + sum + "(" + Arrays.toString(counts) + ")", Manager.CRIT_LOG_LEVEL);
 			this.connTester.logSummary();
 			/*
@@ -469,7 +504,7 @@ public class Manager implements Runnable, AddressUser {
 			self = new Manager(null);
 		}
 
-		Thread selfThread = new Thread(self);
+		Thread selfThread = new Thread(self, "Status Reporting Thread");
 		selfThread.start();
 
 		long nextLargeLog = System.currentTimeMillis() + 1800 * 1000;
