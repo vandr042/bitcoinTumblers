@@ -62,7 +62,11 @@ public class Manager implements Runnable, AddressUser {
 	public static final int CRIT_LOG_LEVEL = 2;
 	public static final int DEBUG_LOG_LEVEL = 3;
 
-	public static final long INT_WINDOW_SEC = 4500;
+	/*
+	 * Int window is 1 hr 50 minutes (tighten?)
+	 */
+	private static final long INT_WINDOW_SEC = 60 * 60 * 2 - 10 * 60;
+	private static final int UNSOL_SIZE = 100;
 
 	private static final boolean BULKY_STATUS = false;
 	private static final boolean HUMAN_READABLE_DATE = false;
@@ -149,8 +153,7 @@ public class Manager implements Runnable, AddressUser {
 			for (String tStr : recoverySet) {
 				String[] tokens = tStr.split(":");
 				try {
-					startingList.add(new PeerAddress(InetAddress.getByName(tokens[0]),
-							Integer.parseInt(tokens[1])));
+					startingList.add(new PeerAddress(InetAddress.getByName(tokens[0]), Integer.parseInt(tokens[1])));
 				} catch (Exception e) {
 					this.logException(e);
 				}
@@ -221,19 +224,16 @@ public class Manager implements Runnable, AddressUser {
 	public void getBurstResults(SanatizedRecord fromPeer, HashSet<SanatizedRecord> responses) {
 		for (SanatizedRecord tLearned : responses) {
 			this.handleAddressNotificiation(tLearned, fromPeer);
-			if ((System.currentTimeMillis() / 1000) - tLearned.getTS() < Manager.INT_WINDOW_SEC) {
-				this.logEvent("Poss Connect Point," + fromPeer.toString() + "," + tLearned.toString() + ","
-						+ tLearned.getTS(), Manager.CRIT_LOG_LEVEL);
-			}
+			this.solTest(tLearned, fromPeer);
 		}
 	}
 
 	@Override
 	public void getAddresses(AddressMessage arg0, Peer arg1) {
-		this.logEvent("Unsolicted  push of " + arg0.getAddresses().size() + " from " + arg1.getAddress(),
+		this.logEvent("ADDRRCV," + arg0.getAddresses().size() + ",from:" + arg1.getAddress().toString(),
 				Manager.DEBUG_LOG_LEVEL);
 		List<PeerAddress> harvestedAddrs = arg0.getAddresses();
-		boolean actuallyUnsolAddr = harvestedAddrs.size() < 3;
+		boolean actuallyUnsolAddr = harvestedAddrs.size() < Manager.UNSOL_SIZE;
 		SanatizedRecord fromPeer = new SanatizedRecord(arg1.getAddress());
 		/*
 		 * This math should be correct, clockSkew is myNow - theirNow (i.e. the
@@ -247,6 +247,8 @@ public class Manager implements Runnable, AddressUser {
 						"ANNOUNCED," + incPeer.toString() + ",from," + fromPeer.toString() + "," + incPeer.getTS(),
 						Manager.CRIT_LOG_LEVEL);
 				this.connTester.givePriorityConnectTarget(incPeer);
+			}else{
+				this.solTest(incPeer, fromPeer);
 			}
 		}
 	}
@@ -277,6 +279,14 @@ public class Manager implements Runnable, AddressUser {
 
 		if (introduce) {
 			this.connTester.giveNewNode(incAddr);
+		}
+	}
+	
+	private void solTest(SanatizedRecord incRecord, SanatizedRecord remotePeer){
+		//TODO take into account time skew
+		if ((System.currentTimeMillis() / 1000) - incRecord.getTS() < Manager.INT_WINDOW_SEC) {
+			this.logEvent("CONNPOINT," + remotePeer.toString() + "," + incRecord.toString() + ","
+					+ incRecord.getTS(), Manager.CRIT_LOG_LEVEL);
 		}
 	}
 
