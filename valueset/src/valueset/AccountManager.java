@@ -27,8 +27,9 @@ public class AccountManager {
         System.out.println(aliases);
         //}
     }
-    
-    private String getTransactionJSON(String url){
+
+    //PROBLEM!!! - This creates multiple key-value pairs for the same anonimity set, so instead of namin the keys with the public IDs give them some generic name.
+    private String getTransactionJSON(String url) {
         StringBuffer response = new StringBuffer();
         String transactionJSON = ""; //Will contain the JSON
 
@@ -48,7 +49,7 @@ public class AccountManager {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        
+
         return transactionJSON;
     }
 
@@ -67,7 +68,7 @@ public class AccountManager {
                 JSONObject txInfo = txs.getJSONObject(i);
                 //String valueOut = txInfo.get("valueOut").toString();
                 JSONArray vIn = txInfo.getJSONArray("vin");
-                
+
                 //Loop through all the vIn's of the transaction
                 for (int j = 0; j < vIn.length(); j++) {
                     JSONObject valueOutInfo = vIn.getJSONObject(j);
@@ -81,18 +82,18 @@ public class AccountManager {
 
                     //Only vOut's with a value less than or equal to our withdrawl value can be given to an alias
                     /*if (Double.parseDouble(vOutValue) <= withdrawl.getValue()) {
-                        //Loop through all the addresses in the vOut
-                        for (int k = 0; k < vOutAddresses.length(); k++) {
-                            //Don't put the key itself in the alias set too
-                            if (!vOutAddresses.get(k).toString().equals(withdrawl.getKeyResponsible())) {
-                                //If we don't have this guy on record, set up a alias for him
-                                if (!aliases.containsKey(withdrawl.getKeyResponsible())) {
-                                    aliases.put(withdrawl.getKeyResponsible(), new HashSet<String>());
-                                }
-                                aliases.get(withdrawl.getKeyResponsible()).add(vOutAddresses.get(k).toString());
-                            }
-                        }
-                    }*/
+                     //Loop through all the addresses in the vOut
+                     for (int k = 0; k < vOutAddresses.length(); k++) {
+                     //Don't put the key itself in the alias set too
+                     if (!vOutAddresses.get(k).toString().equals(withdrawl.getKeyResponsible())) {
+                     //If we don't have this guy on record, set up a alias for him
+                     if (!aliases.containsKey(withdrawl.getKeyResponsible())) {
+                     aliases.put(withdrawl.getKeyResponsible(), new HashSet<String>());
+                     }
+                     aliases.get(withdrawl.getKeyResponsible()).add(vOutAddresses.get(k).toString());
+                     }
+                     }
+                     }*/
                 }
             }
         } catch (JSONException e) {
@@ -166,6 +167,7 @@ public class AccountManager {
     private Set<String> getAnonimitySet(Transaction withdrawl) {
         Set<String> anonimitySet = new HashSet<String>();
         HashMap<String, Double> balances = new HashMap<String, Double>();
+        double summedWithdrawalValues = withdrawl.getValue();
 
         /*
          * Build the total deposits for all keys at the point in time when the
@@ -191,10 +193,30 @@ public class AccountManager {
         }
 
         /*
+         * Now we subtract previous withdrawals from our current key or its aliases
+         * from our balances HashMap.
+         */
+        for (Transaction tWithdrawal : this.withdrawls) {
+
+            //Check if this withdrawl is previous to our current withdrawl
+            if (tWithdrawal.getTimeStamp() > withdrawl.getTimeStamp()) {
+                break;
+            }
+
+            //Check if this withdrawal is in our current withdrawal's anonymity set
+            if (aliases.containsKey(withdrawl.getKeyResponsible())) {
+                if (aliases.get(withdrawl.getKeyResponsible()).contains(tWithdrawal.getKeyResponsible())) {
+                    //If it is, then increase the value of the actual withdrawal
+                    summedWithdrawalValues += tWithdrawal.getValue();
+                }
+            }
+        }
+
+        /*
          * Find all keys that had sufficient value to ask for the withdrawal
          */
         for (String tempDepositKey : balances.keySet()) {
-            if (balances.get(tempDepositKey) >= withdrawl.getValue()) {
+            if (balances.get(tempDepositKey) >= summedWithdrawalValues) {
                 anonimitySet.add(tempDepositKey);
             }
         }
@@ -203,3 +225,14 @@ public class AccountManager {
     }
 
 }
+
+
+/******
+ * NEW CODE MUST DO THE FOLLWING:
+ * 
+ * 1. Loop thru all the deposits and create a ledger
+ * 2. When you hit a withdrawal (w), go through every withdrawal before (w) and check if that withdrawal_ID is in w's anonymity set. 
+ * 3. If NOT, then proceed as above.
+ * 4. If YES, then add up the values of the withdrawals, and look only for deposits that can handle the new total value.
+ * 
+ */
