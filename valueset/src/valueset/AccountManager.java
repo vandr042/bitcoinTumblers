@@ -23,7 +23,7 @@ public class AccountManager {
 
     public void generateAliases() {
         //for (Transaction currentWithdrawl : withdrawls){
-        goToBlockchainExplorer(new Transaction(false, "1G6qvcJbuykkhVwu8u5MPGjeF65ix8qA1m", 1457868000, 1.000)); //Just for temporary use
+        goToBlockchainExplorer(new Transaction(false, "35DafUtd6RPEi9JRK4gEc3Z6s9FRkh9ohW", 1457868000, 1.000)); //Just for temporary use
         System.out.println(aliases);
         //}
     }
@@ -193,8 +193,7 @@ public class AccountManager {
         }
 
         /*
-         * Now we subtract previous withdrawals from our current key or its aliases
-         * from our balances HashMap.
+         * Now we increase summedWithdrawalValues if an alias made a wihdrawla earlier
          */
         for (Transaction tWithdrawal : this.withdrawls) {
 
@@ -210,6 +209,11 @@ public class AccountManager {
                     summedWithdrawalValues += tWithdrawal.getValue();
                 }
             }
+            
+            //Use this conditional if a key is not in its own anonymity set
+            /*if (tWithdrawal.getKeyResponsible() == withdrawl.getKeyResponsible()){
+                summedWithdrawalValues += tWithdrawal.getValue();
+            }*/
         }
 
         /*
@@ -229,7 +233,7 @@ public class AccountManager {
 
 /******
  * NEW CODE MUST DO THE FOLLWING:
- * 
+ *
  * 1. Loop thru all the deposits and create a ledger
  * 2. When you hit a withdrawal (w), go through every withdrawal before (w) and check if that withdrawal_ID is in w's anonymity set. 
  * 3. If NOT, then proceed as above.
