@@ -84,9 +84,8 @@ public class Peer extends PeerSocketHandler {
 	private final Context context;
 
 	// MJS added for fast parsing of Address responses
-	private Boolean solicitFlag;
-	private AddressUser solicAddressConsumer;
-	private AddressUser unsolAddressConsumer;
+	private ReentrantLock addrLock;
+	private AddressUser addressConsumer;
 
 	// MJS added for rough attempt at insecure time synch
 	private long clockSkewGuess;
@@ -337,9 +336,8 @@ public class Peer extends PeerSocketHandler {
 		this.context = Context.get();
 
 		this.clockSkewGuess = 0;
-		this.solicitFlag = false;
-		this.solicAddressConsumer = null;
-		this.unsolAddressConsumer = null;
+		this.addrLock = new ReentrantLock();
+		this.addressConsumer = null;
 	}
 
 	/**
@@ -625,12 +623,10 @@ public class Peer extends PeerSocketHandler {
 			future.set(m);
 	}
 
-	public void registerSolAddressConsumer(AddressUser addressConsumer) {
-		this.solicAddressConsumer = addressConsumer;
-	}
-
-	public void registerUnsolAddressConsumer(AddressUser addressConsumer) {
-		this.unsolAddressConsumer = addressConsumer;
+	public void registerAddressConsumer(AddressUser myAddressConsumer) {
+		this.addrLock.lock();
+		this.addressConsumer = myAddressConsumer;
+		this.addrLock.unlock();
 	}
 
 	private void processAddressMessage(AddressMessage m) {
@@ -641,19 +637,11 @@ public class Peer extends PeerSocketHandler {
 		 * unsolicted as solicited and the next message vice versa, but meh,
 		 * that's not that large of a deal
 		 */
-
-		synchronized (this.solicitFlag) {
-			if (this.solicitFlag.booleanValue()) {
-				if(this.solicAddressConsumer != null){
-					this.solicAddressConsumer.getAddresses(m, this);
-				}
-				this.solicitFlag = false;
-			} else {
-				if(this.unsolAddressConsumer != null){
-					this.unsolAddressConsumer.getAddresses(m, this);
-				}
-			}
+		this.addrLock.lock();
+		if (this.addressConsumer != null) {
+			this.addressConsumer.getAddresses(m, this);
 		}
+		this.addrLock.unlock();
 
 		if (Peer.LOBOTOMIZE) {
 			return;
@@ -1616,10 +1604,6 @@ public class Peer extends PeerSocketHandler {
 	 * with the answer once the peer has replied.
 	 */
 	public ListenableFuture<AddressMessage> getAddr() {
-		synchronized (this.solicitFlag) {
-			this.solicitFlag = true;
-		}
-
 		SettableFuture<AddressMessage> future = null;
 		if (!Peer.LOBOTOMIZE) {
 			future = SettableFuture.create();
