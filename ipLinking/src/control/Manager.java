@@ -43,7 +43,9 @@ public class Manager implements Runnable, AddressUser {
 	private HashMap<SanatizedRecord, Peer> peerObjs;
 
 	private ConnectionTester connTester;
+	private Thread connTesterThread;
 	private AddressHarvest addrHarvester;
+	private Thread addrHarvestThread;
 
 	private int myLogLevel;
 	private ThreadedWriter runLog;
@@ -52,6 +54,8 @@ public class Manager implements Runnable, AddressUser {
 	public static Random insecureRandom = new Random();
 
 	private static final String RECOVER_DIR = "recovery/";
+	private static final String LOG_DIR = "logs/";
+	private static final String EX_DIR = "errors/";
 
 	private static final DateFormat LONG_DF = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 	private static final long STATUSREPORT_INTERVAL_SEC = 120;
@@ -70,6 +74,7 @@ public class Manager implements Runnable, AddressUser {
 
 	private static final boolean BULKY_STATUS = false;
 	private static final boolean HUMAN_READABLE_DATE = false;
+	private static final boolean SUPPRESS_EXCESS_STATE = true;
 
 	public Manager(Set<String> recoverySet) throws IOException {
 		/*
@@ -90,9 +95,17 @@ public class Manager implements Runnable, AddressUser {
 		/*
 		 * Logging
 		 */
+		File tFile = new File(Manager.LOG_DIR);
+		if(!tFile.exists()){
+			tFile.mkdirs();
+		}
+		tFile = new File(Manager.EX_DIR);
+		if(!tFile.exists()){
+			tFile.mkdirs();
+		}
 		String logName = Manager.getTimestamp();
-		this.runLog = new ThreadedWriter(logName, true);
-		this.exceptionLog = new ThreadedWriter(logName + "-err", true);
+		this.runLog = new ThreadedWriter(Manager.LOG_DIR + logName, true);
+		this.exceptionLog = new ThreadedWriter(Manager.EX_DIR + logName + "-err", true);
 		this.myLogLevel = Manager.DEBUG_LOG_LEVEL;
 		Thread loggingThread = new Thread(this.runLog, "general-logging");
 		Thread exceptionThread = new Thread(this.exceptionLog, "exception-logging");
@@ -123,18 +136,17 @@ public class Manager implements Runnable, AddressUser {
 		 * Start ze address harvester
 		 */
 		this.addrHarvester = new AddressHarvest(this);
-		Thread harvestThread = new Thread(this.addrHarvester, "Address Harvest Master");
-		harvestThread.setDaemon(true);
-		harvestThread.start();
+		this.addrHarvestThread =  new Thread(this.addrHarvester, "Address Harvest Master");
+		this.addrHarvestThread.start();
 
 		/*
 		 * Start ze connection tester, WE MUST BE 100% READY FOR LIVE NODES AT
 		 * THIS POINT
 		 */
 		this.connTester = new ConnectionTester(this);
-		Thread connTestThread = new Thread(this.connTester);
-		connTestThread.setName("Connection Tester Master");
-		connTestThread.start();
+		this.connTesterThread = new Thread(this.connTester);
+		this.connTesterThread.setName("Connection Tester Master");
+		this.connTesterThread.start();
 
 		/*
 		 * Learn peers from the DNS Discovery system of bitcoin
@@ -221,13 +233,6 @@ public class Manager implements Runnable, AddressUser {
 		}
 	}
 
-	public void getBurstResults(SanatizedRecord fromPeer, HashSet<SanatizedRecord> responses) {
-		for (SanatizedRecord tLearned : responses) {
-			this.handleAddressNotificiation(tLearned, fromPeer);
-			this.solTest(tLearned, fromPeer);
-		}
-	}
-
 	@Override
 	public void getAddresses(AddressMessage arg0, Peer arg1) {
 		this.logEvent("ADDRRCV," + arg0.getAddresses().size() + ",from:" + arg1.getAddress().toString(),
@@ -247,7 +252,7 @@ public class Manager implements Runnable, AddressUser {
 						"ANNOUNCED," + incPeer.toString() + ",from," + fromPeer.toString() + "," + incPeer.getTS(),
 						Manager.CRIT_LOG_LEVEL);
 				this.connTester.givePriorityConnectTarget(incPeer);
-			}else{
+			} else {
 				this.solTest(incPeer, fromPeer);
 			}
 		}
@@ -270,7 +275,9 @@ public class Manager implements Runnable, AddressUser {
 		 */
 		boolean introduce = false;
 		if (learnedFrom != null) {
-			theRecord.addNodeWhoKnowsMe(learnedFrom, incAddr.getTS());
+			if (!Manager.SUPPRESS_EXCESS_STATE) {
+				theRecord.addNodeWhoKnowsMe(learnedFrom, incAddr.getTS());
+			}
 			introduce = theRecord.shouldIntroduce(incAddr.getTS());
 		} else {
 			introduce = true;
@@ -281,12 +288,17 @@ public class Manager implements Runnable, AddressUser {
 			this.connTester.giveNewNode(incAddr);
 		}
 	}
-	
-	private void solTest(SanatizedRecord incRecord, SanatizedRecord remotePeer){
-		//TODO take into account time skew
-		if ((System.currentTimeMillis() / 1000) - incRecord.getTS() < Manager.INT_WINDOW_SEC) {
-			this.logEvent("CONNPOINT," + remotePeer.toString() + "," + incRecord.toString() + ","
-					+ incRecord.getTS(), Manager.CRIT_LOG_LEVEL);
+
+	private void solTest(SanatizedRecord incRecord, SanatizedRecord remotePeer) {
+		// XXX should we log instances of a null peer?
+		Peer tPeer = this.getPeerObject(remotePeer);
+		if (tPeer != null) {
+			long myNowSec = System.currentTimeMillis() / 1000;
+			long theirNowSec = tPeer.convertLocalTimeToThiers(myNowSec);
+			if (theirNowSec - incRecord.getTS() < Manager.INT_WINDOW_SEC) {
+				this.logEvent("CONNPOINT," + remotePeer.toString() + "," + incRecord.toString() + ","
+						+ incRecord.getTS() + "," + tPeer.getClockSkewGuess(), Manager.CRIT_LOG_LEVEL);
+			}
 		}
 	}
 
@@ -435,6 +447,16 @@ public class Manager implements Runnable, AddressUser {
 		}
 	}
 
+	private void bluePill() {
+		try {
+			this.exceptionLog.close();
+			Thread.sleep(5000);
+		} catch (Throwable e) {
+
+		}
+		System.exit(0);
+	}
+
 	@Override
 	public void run() {
 
@@ -455,6 +477,16 @@ public class Manager implements Runnable, AddressUser {
 			}
 			this.logEvent("active connections " + sum + "(" + Arrays.toString(counts) + ")", Manager.CRIT_LOG_LEVEL);
 			this.connTester.logSummary();
+
+			if (!this.connTesterThread.isAlive()) {
+				this.logException(new RuntimeException("CONN TESTER THREAD DIED!"));
+				this.bluePill();
+			}
+			if(!this.addrHarvestThread.isAlive()){
+				this.logException(new RuntimeException("HARVEST THREAD DIED!"));
+				this.bluePill();
+			}
+
 			/*
 			 * Force the cleaning up of useless arrays every little bit
 			 */
