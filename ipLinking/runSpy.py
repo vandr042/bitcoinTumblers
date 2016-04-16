@@ -35,7 +35,7 @@ def compile():
     print("done compiling")
 
 def run(restart):
-    procArgs = ["java", "-cp", JAR_STR + ":" + BUILD_DEST, "-Xmx14G", "-d64", BASE_CLASS]
+    procArgs = ["java", "-XX:+UseG1GC","-cp", JAR_STR + ":" + BUILD_DEST, "-Xmx19G", "-d64", BASE_CLASS]
     if restart:
         procArgs = procArgs + ["--recovery"]
     runProc = subprocess.Popen(procArgs)

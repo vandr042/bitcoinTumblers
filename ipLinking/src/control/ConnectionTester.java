@@ -91,8 +91,8 @@ public class ConnectionTester implements Runnable {
 				 * XXX there are a few race conditions where I think this could
 				 * happen
 				 */
-				this.myParent
-						.logException(new IllegalStateException("someone called giveNewNode twice " + addr.toString()));
+				//this.myParent
+				//		.logException(new IllegalStateException("someone called giveNewNode twice " + addr.toString()));
 			} else {
 				this.scheduledTestTimes.add(clonedRecord);
 				this.scheduledPeers.add(clonedRecord);
@@ -291,7 +291,7 @@ public class ConnectionTester implements Runnable {
 		try {
 			SanatizedRecord failed = new SanatizedRecord(failedPeer.getAddress());
 			this.handleFailedTest(failed, reason, "tcpfailed");
-		} catch (Exception e) {
+		} catch (Throwable e) {
 			this.myParent.logException(e);
 		}
 	}
@@ -322,7 +322,7 @@ public class ConnectionTester implements Runnable {
 			 */
 			SanatizedRecord failed = new SanatizedRecord(failedPeer.getAddress());
 			this.handleFailedTest(failed, reason, "versionfailed");
-		} catch (Exception e) {
+		} catch (Throwable e) {
 			this.myParent.logException(e);
 		}
 	}
@@ -337,12 +337,11 @@ public class ConnectionTester implements Runnable {
 				this.pendingTests.remove(tRec);
 			}
 
-			// TODO should this have a thread pool/executor?
-			workingPeer.addConnectionEventListener(new DeadPeerListener(this.myParent));
-
 			this.myParent.resolvedStartedPeer(workingPeer);
+			//TODO thread pool?
+			workingPeer.addConnectionEventListener(new DeadPeerListener(this.myParent));
 			this.myParent.logEvent("conn," + tRec.toString(), Manager.CRIT_LOG_LEVEL);
-		} catch (Exception e) {
+		} catch (Throwable e) {
 			this.myParent.logException(e);
 		}
 	}
