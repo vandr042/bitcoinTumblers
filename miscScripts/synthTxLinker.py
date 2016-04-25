@@ -3,13 +3,13 @@
 import sys
 import random
 
-OUT_FILE_BASE = "realDelay"
+OUT_FILE_BASE = "mjsFull"
 DELAY_FILE = "delays-10.txt"
 
-NUMBER_PUBLIC_PEERS = 4000
-NUMBER_PRIVATE_PEERS = 10000
+NUMBER_PUBLIC_PEERS = 6000
+NUMBER_PRIVATE_PEERS = 100000
 
-MIN_PEERS_KNOWN = 4
+MIN_PEERS_KNOWN = 7
 MAX_PEERS_KNOWN = 7
 MAX_PEERS = 7
 
@@ -44,7 +44,9 @@ def runSim(pubList, privList, privConnMap, pubConnMap, delayModel):
         for i in range(detectCount):
             outFP.write("remoteconn," + tPriv + "," + tList[i] + "," + str(currentTime) + "\n")
             currentTime = currentTime + random.randint(3, 500)
-    for i in range(100):
+    for i in range(1000):
+        if i % 100 == 0:
+            print(str(i))
         currentTime = currentTime + random.randint(1000, 5000)
         sendingPeer = privList[random.randint(0, len(privList) - 1)]
         txID = str(random.getrandbits(32))
