@@ -5,13 +5,13 @@ import java.net.InetSocketAddress;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.LinkedList;
 import java.util.concurrent.TimeUnit;
 import java.io.*;
 
 import org.bitcoinj.core.AddressMessage;
 import org.bitcoinj.core.AddressUser;
 import org.bitcoinj.core.Context;
+import org.bitcoinj.core.InventoryItem;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Peer;
 import org.bitcoinj.core.PeerAddress;
@@ -96,11 +96,11 @@ public class Manager implements Runnable, AddressUser {
 		 * Logging
 		 */
 		File tFile = new File(Manager.LOG_DIR);
-		if(!tFile.exists()){
+		if (!tFile.exists()) {
 			tFile.mkdirs();
 		}
 		tFile = new File(Manager.EX_DIR);
-		if(!tFile.exists()){
+		if (!tFile.exists()) {
 			tFile.mkdirs();
 		}
 		String logName = Manager.getTimestamp();
@@ -136,7 +136,7 @@ public class Manager implements Runnable, AddressUser {
 		 * Start ze address harvester
 		 */
 		this.addrHarvester = new AddressHarvest(this);
-		this.addrHarvestThread =  new Thread(this.addrHarvester, "Address Harvest Master");
+		this.addrHarvestThread = new Thread(this.addrHarvester, "Address Harvest Master");
 		this.addrHarvestThread.start();
 
 		/*
@@ -230,6 +230,16 @@ public class Manager implements Runnable, AddressUser {
 		if (actuallyRemoved) {
 			this.addrHarvester.poisonPeer(tRec);
 			this.connTester.giveReconnectTarget(tRec);
+		}
+	}
+
+	@Override
+	public void getInventory(List<InventoryItem> arg0, Peer arg1) {
+		long now = System.currentTimeMillis();
+		this.logEvent("INVRCV," + arg0.size() + ",from:" + arg1.getAddress().toString(), Manager.DEBUG_LOG_LEVEL);
+		for (InventoryItem tItem : arg0) {
+			this.logEvent("TX," + tItem.hash.toString() + ",from," + arg1.getAddress().toString() + "," + now,
+					Manager.CRIT_LOG_LEVEL);
 		}
 	}
 
@@ -482,7 +492,7 @@ public class Manager implements Runnable, AddressUser {
 				this.logException(new RuntimeException("CONN TESTER THREAD DIED!"));
 				this.bluePill();
 			}
-			if(!this.addrHarvestThread.isAlive()){
+			if (!this.addrHarvestThread.isAlive()) {
 				this.logException(new RuntimeException("HARVEST THREAD DIED!"));
 				this.bluePill();
 			}
