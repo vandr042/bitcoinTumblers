@@ -29,7 +29,7 @@ import net.sourceforge.argparse4j.inf.Namespace;
 
 import data.PeerRecord;
 import data.SanatizedRecord;
-import logging.ThreadedWriter;
+import logging.*;
 
 public class Manager implements Runnable, AddressUser {
 
@@ -54,8 +54,8 @@ public class Manager implements Runnable, AddressUser {
 	public static Random insecureRandom = new Random();
 
 	private static final String RECOVER_DIR = "recovery/";
-	private static final String LOG_DIR = "logs/";
-	private static final String EX_DIR = "errors/";
+	private static final File LOG_DIR = new File("logs/");
+	private static final File EX_DIR = new File("errors/");
 
 	private static final DateFormat LONG_DF = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 	private static final long STATUSREPORT_INTERVAL_SEC = 120;
@@ -95,16 +95,14 @@ public class Manager implements Runnable, AddressUser {
 		/*
 		 * Logging
 		 */
-		File tFile = new File(Manager.LOG_DIR);
-		if (!tFile.exists()) {
-			tFile.mkdirs();
+		if (!Manager.LOG_DIR.exists()) {
+			Manager.LOG_DIR.mkdirs();
 		}
-		tFile = new File(Manager.EX_DIR);
-		if (!tFile.exists()) {
-			tFile.mkdirs();
+		if (!Manager.EX_DIR.exists()) {
+			Manager.EX_DIR.mkdirs();
 		}
 		String logName = Manager.getTimestamp();
-		this.runLog = new ThreadedWriter(Manager.LOG_DIR + logName, true);
+		this.runLog = new RotatingLogger(Manager.LOG_DIR, true);
 		this.exceptionLog = new ThreadedWriter(Manager.EX_DIR + logName + "-err", true);
 		this.myLogLevel = Manager.DEBUG_LOG_LEVEL;
 		Thread loggingThread = new Thread(this.runLog, "general-logging");
