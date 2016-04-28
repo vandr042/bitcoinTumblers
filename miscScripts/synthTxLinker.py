@@ -7,9 +7,9 @@ OUT_FILE_BASE = "mjsFull"
 DELAY_FILE = "delays-10.txt"
 
 NUMBER_PUBLIC_PEERS = 6000
-NUMBER_PRIVATE_PEERS = 100000
+NUMBER_PRIVATE_PEERS = 30000
 
-MIN_PEERS_KNOWN = 7
+MIN_PEERS_KNOWN = 4
 MAX_PEERS_KNOWN = 7
 MAX_PEERS = 7
 
@@ -22,6 +22,7 @@ def main():
     delayModel = buildDelayModel()
     runSim(pubList, privList, privConnMap, pubConnMap, delayModel)
 
+#TODO re-inflate (mult by 100)
 def buildDelayModel():
     delays = []
     inFP = open(DELAY_FILE)
@@ -88,7 +89,7 @@ def doTx(sendingNode, privConn, pubConn, fp, time, txID, delayModel):
         lastTime = smallestTime
     return lastTime
     
-
+#TODO add network "jitter" (random number between 20 ms and 500 ms)
 def genTxDelay(delayModel):
     return random.choice(delayModel)
             
