@@ -6,47 +6,39 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class ThreadedWriter extends Writer implements Runnable {
 
 	private boolean autoFlush;
-	private BufferedWriter actualOutput;
+	protected BufferedWriter actualOutput;
+	protected File outputFileRef;
 	private LinkedBlockingQueue<String> internalQueue;
 
-	private static final String POISON_PILL = "094892489237489237589237589234289347289";
+	protected static final String POISON_PILL = "094892489237489237589237589234289347289";
 
-	public ThreadedWriter(String fileName) throws IOException{
-		this(fileName, false);
+	public ThreadedWriter(String fileName) throws IOException {
+		this(new File(fileName), false);
 	}
-	
+
 	public ThreadedWriter(String fileName, boolean fastFlush) throws IOException {
+		this(new File(fileName), fastFlush);
+	}
+
+	public ThreadedWriter(File outFile, boolean fastFlush) throws IOException {
 		super();
 		this.autoFlush = fastFlush;
-		this.actualOutput = new BufferedWriter(new FileWriter(fileName));
+		this.outputFileRef = outFile;
+		this.actualOutput = new BufferedWriter(new FileWriter(this.outputFileRef));
 		this.internalQueue = new LinkedBlockingQueue<String>();
 	}
 
 	@Override
 	public void run() {
-		String currentStr = null;
-
-		try {
-			while (true) {
-				currentStr = this.internalQueue.take();
-				if (currentStr.equals(ThreadedWriter.POISON_PILL)) {
-					break;
-				} else {
-					this.actualOutput.write(currentStr);
-					if(this.autoFlush){
-						this.actualOutput.flush();
-					}
-				}
+		while (true) {
+			if (!this.handleLineDump()) {
+				break;
 			}
-		} catch (InterruptedException e1) {
-			e1.printStackTrace();
-			System.exit(-2);
-		} catch (IOException e2) {
-			System.err.println("HOLY FUCK IO EXCEPTION");
-			e2.printStackTrace();
-			System.exit(-2);
 		}
+		this.interalShutdown();
+	}
 
+	protected void interalShutdown() {
 		try {
 			this.actualOutput.close();
 		} catch (IOException e2) {
@@ -54,10 +46,29 @@ public class ThreadedWriter extends Writer implements Runnable {
 			e2.printStackTrace();
 			System.exit(-2);
 		}
-		
-		if(this.internalQueue.size() > 0){
+
+		if (this.internalQueue.size() > 0) {
 			throw new RuntimeException("Information added to threaded writer after close!");
 		}
+	}
+
+	protected boolean handleLineDump() {
+		boolean writeableString = true;
+		try {
+			String currentStr = this.internalQueue.take();
+			writeableString = currentStr.equals(ThreadedWriter.POISON_PILL);
+			if (writeableString) {
+				this.actualOutput.write(currentStr);
+				if (this.autoFlush) {
+					this.actualOutput.flush();
+				}
+			}
+		} catch (Exception e) {
+			System.err.println("EXCEPTION IN I/O OF LOGGER");
+			System.exit(-2);
+		}
+
+		return writeableString;
 	}
 
 	@Override
@@ -88,11 +99,11 @@ public class ThreadedWriter extends Writer implements Runnable {
 			throw new IOException("error inserting into internal queue");
 		}
 	}
-	
-	public void writeOrDie(String outStr){
-		try{
+
+	public void writeOrDie(String outStr) {
+		try {
 			this.write(outStr);
-		} catch(IOException e){
+		} catch (IOException e) {
 			e.printStackTrace();
 			System.exit(-1);
 		}

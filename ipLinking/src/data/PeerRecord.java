@@ -2,6 +2,7 @@ package data;
 
 import java.util.HashMap;
 
+import control.ConnectionTester;
 import control.Manager;
 
 public class PeerRecord {
@@ -12,7 +13,7 @@ public class PeerRecord {
 	private long timeConnFailed;
 	private long lastUptime;
 	private HashMap<SanatizedRecord, Long> peersWhoKnowMe;
-	private volatile boolean introducedToConnTester;
+	private boolean introducedToConnTester;
 
 	private Manager myParent;
 
@@ -94,14 +95,27 @@ public class PeerRecord {
 			this.peersWhoKnowMe.put(nodeWhoKnows, ts);
 		}
 	}
-	
-	public void flagAsPassedToConnTester(){
-		this.introducedToConnTester = true;
+
+	public boolean shouldIntroduce(long ts){
+		boolean response = false;
+		synchronized(this){
+			if(!this.introducedToConnTester){
+				if((System.currentTimeMillis()/1000) - ts < ConnectionTester.INTERESTING_WINDOW_SEC){
+					response = true;
+					this.introducedToConnTester = true;
+				}
+			}
+		}
+		return response;
 	}
 	
-	public boolean connTesterKnows(){
-		return this.introducedToConnTester;
+	public void setAsIntroduced(){
+		synchronized(this){
+			this.introducedToConnTester = true;
+		}
 	}
+
+	//XXX might want a want to remove this flag if we get smart about this in the future
 
 	public SanatizedRecord getMyAddr() {
 		return myAddr;

@@ -142,8 +142,6 @@ public class PeerLink {
 		currTstamp = ttspp.getTimeStamp();
 		int i = 1;
 		while(tStampsDeep < tStampDepth && i < peers.size()){
-			if (currTstamp > lastTstamp)
-				tStampsDeep++;
 			lastTstamp = currTstamp;
 			HashSet<String> peerConns = this.pMap.get(tpeer);
 			for(String p:peerConns){
@@ -153,10 +151,12 @@ public class PeerLink {
 					int count = peerSeenCount.get(p);
 					peerSeenCount.put(p, count + 1);
 				}
-				ttspp = peers.get(i);
-				tpeer = ttspp.getPeer();
-				currTstamp = ttspp.getTimeStamp();
 			}
+			ttspp = peers.get(i);
+			tpeer = ttspp.getPeer();
+			currTstamp = ttspp.getTimeStamp();
+			if (currTstamp > lastTstamp)
+				tStampsDeep++;
 			i++;
 		}//end while
 		/*************************************************************/
@@ -174,15 +174,11 @@ public class PeerLink {
 		}
 		Collections.sort(pcpList);
 		int highCount, currCount, j;
-		j= 0;
+		j= 1;
 		highCount = currCount = pcpList.get(0).getCount();
-		while (currCount == highCount){
+		while (currCount == highCount && j < pcpList.size()){
+			currCount = pcpList.get(j).getCount();
 			j++;
-			try{
-				currCount = pcpList.get(j).getCount();
-			}catch(IndexOutOfBoundsException e){
-				break;
-			}
 		}
 		pcpList = pcpList.subList(0, j);
 		mostCommonPeers = new LinkedList<String>();

@@ -47,7 +47,7 @@ public class ConnectionTester implements Runnable {
 
 	private static final long VERSION_TIMEOUT_SEC = 10;
 
-	private static final long INTERESTING_WINDOW_SEC = 24 * 3600;
+	public static final long INTERESTING_WINDOW_SEC = 24 * 3600;
 
 	private enum ConnectionEvent {
 		AVAILTEST, TIMER;
@@ -91,7 +91,8 @@ public class ConnectionTester implements Runnable {
 				 * XXX there are a few race conditions where I think this could
 				 * happen
 				 */
-				this.myParent.logException(new IllegalStateException("someone called giveNewNode twice!"));
+				//this.myParent
+				//		.logException(new IllegalStateException("someone called giveNewNode twice " + addr.toString()));
 			} else {
 				this.scheduledTestTimes.add(clonedRecord);
 				this.scheduledPeers.add(clonedRecord);
@@ -185,11 +186,13 @@ public class ConnectionTester implements Runnable {
 						}
 					}
 				}
-			} catch (Exception e) {
+			} catch (Throwable e) {
+				if (e instanceof Error) {
+					this.myParent.logException(new RuntimeException("WTFHOLYSHIT"));
+				}
 				this.myParent.logException(e);
 			}
 		}
-
 	}
 
 	private long computeNextWaitTime() {
@@ -213,10 +216,7 @@ public class ConnectionTester implements Runnable {
 			return false;
 		}
 
-		PeerRecord tRecord = null;
-		while (tRecord == null) {
-			tRecord = this.myParent.getRecord(toTest);
-		}
+		PeerRecord tRecord = this.myParent.getRecord(toTest);
 
 		/*
 		 * XXX LOG IF WE'RE TRYING ADDERS TOO FAST?
@@ -280,16 +280,20 @@ public class ConnectionTester implements Runnable {
 			}
 		}
 		this.myParent.logEvent(message + "," + failed.toString() + "," + reason, Manager.DEBUG_LOG_LEVEL);
+	}
 
+	public void reportTCPFailure(Peer failedPeer, String reason) {
 		/*
 		 * Report the open test slot
 		 */
 		this.eventQueue.add(ConnectionEvent.AVAILTEST);
-	}
 
-	public void reportTCPFailure(Peer failedPeer, String reason) {
-		SanatizedRecord failed = new SanatizedRecord(failedPeer.getAddress());
-		this.handleFailedTest(failed, reason, "tcpfailed");
+		try {
+			SanatizedRecord failed = new SanatizedRecord(failedPeer.getAddress());
+			this.handleFailedTest(failed, reason, "tcpfailed");
+		} catch (Throwable e) {
+			this.myParent.logException(e);
+		}
 	}
 
 	public void reportTCPSuccess(Peer connPeer) {
@@ -303,31 +307,42 @@ public class ConnectionTester implements Runnable {
 
 	public void reportNoVersionPeer(Peer failedPeer, String reason) {
 		/*
-		 * Force the connection closed
+		 * Report the open test slot
 		 */
-		failedPeer.close();
+		this.eventQueue.add(ConnectionEvent.AVAILTEST);
 
-		/*
-		 * Record the failure time and remove pending test
-		 */
-		SanatizedRecord failed = new SanatizedRecord(failedPeer.getAddress());
-		this.handleFailedTest(failed, reason, "versionfailed");
+		try {
+			/*
+			 * Force the connection closed
+			 */
+			failedPeer.close();
+
+			/*
+			 * Record the failure time and remove pending test
+			 */
+			SanatizedRecord failed = new SanatizedRecord(failedPeer.getAddress());
+			this.handleFailedTest(failed, reason, "versionfailed");
+		} catch (Throwable e) {
+			this.myParent.logException(e);
+		}
 	}
 
 	public void reportWorkingPeer(Peer workingPeer) {
-
-		SanatizedRecord tRec = new SanatizedRecord(workingPeer.getAddress());
-		this.myParent.getRecord(tRec).signalConnected();
-		synchronized (this) {
-			this.pendingTests.remove(tRec);
-		}
-
-		// TODO should this have a thread pool/executor?
-		workingPeer.addConnectionEventListener(new DeadPeerListener(this.myParent));
-
-		this.myParent.resolvedStartedPeer(workingPeer);
-
-		this.myParent.logEvent("conn," + tRec.toString(), Manager.CRIT_LOG_LEVEL);
 		this.eventQueue.add(ConnectionEvent.AVAILTEST);
+
+		try {
+			SanatizedRecord tRec = new SanatizedRecord(workingPeer.getAddress());
+			this.myParent.getRecord(tRec).signalConnected();
+			synchronized (this) {
+				this.pendingTests.remove(tRec);
+			}
+
+			this.myParent.resolvedStartedPeer(workingPeer);
+			//TODO thread pool?
+			workingPeer.addConnectionEventListener(new DeadPeerListener(this.myParent));
+			this.myParent.logEvent("conn," + tRec.toString(), Manager.CRIT_LOG_LEVEL);
+		} catch (Throwable e) {
+			this.myParent.logException(e);
+		}
 	}
 }

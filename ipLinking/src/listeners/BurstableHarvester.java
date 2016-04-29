@@ -26,7 +26,7 @@ public class BurstableHarvester implements Runnable, AddressUser {
 	private List<Long> delays;
 	private List<Integer> newRecords;
 
-	private static final int MAX_ROUNDS = 60;
+	private static final int MAX_ROUNDS = 30;
 
 	public BurstableHarvester(SanatizedRecord myRec, Peer target, AddressHarvest parent) {
 		this.myRecord = myRec;

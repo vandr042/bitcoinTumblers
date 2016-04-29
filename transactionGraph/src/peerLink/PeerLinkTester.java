@@ -157,14 +157,15 @@ public class PeerLinkTester {
 	private static void gogo(String fileBase) throws IOException {
 		PeerLink pl = new PeerLink("../miscScripts/" + fileBase + "-out.log");
 		PeerLinkTester test = new PeerLinkTester(1, pl, 10, "../miscScripts/" + fileBase + "-groundTruth.log",10);
-		test.testBestDepthWithVoting(fileBase.split("-")[0] + ".txt");
+		test.testForBestDepth(fileBase.split("-")[0] + ".txt");
+		test.testBestDepthWithVoting(fileBase.split("-")[0] + "Voting" + ".txt");
 	}
 
 	public static void main(String[] args) throws IOException {
-		gogo("peer-finder-synth");
-		gogo("allKnown-peer-finder-synth");
-		gogo("perfect-peer-finder-synth");
-		gogo("zeroRandom-peer-finder-synth");
+	//	gogo("peer-finder-synth");
+	//	gogo("allKnown-peer-finder-synth");
+	//	gogo("perfect-peer-finder-synth");
+	//	gogo("zeroRandom-peer-finder-synth");
 		gogo("realDelay-peer-finder-synth");
 	}
 }
