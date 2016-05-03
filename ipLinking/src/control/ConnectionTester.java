@@ -248,7 +248,7 @@ public class ConnectionTester implements Runnable {
 	public void logSummary() {
 		synchronized (this) {
 			this.myParent.logEvent("CONNSTATUS," + this.pendingTests.size() + "," + this.priorityTests.size() + ","
-					+ this.scheduledPeers.size(), Manager.DEBUG_LOG_LEVEL);
+					+ this.scheduledPeers.size(), Manager.CRIT_LOG_LEVEL);
 		}
 	}
 

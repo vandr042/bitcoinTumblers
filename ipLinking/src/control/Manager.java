@@ -53,8 +53,8 @@ public class Manager implements Runnable, AddressUser {
 
 	public static Random insecureRandom = new Random();
 
+	public static final File LOG_DIR = new File("logs/");
 	private static final String RECOVER_DIR = "recovery/";
-	private static final File LOG_DIR = new File("logs/");
 	private static final File EX_DIR = new File("errors/");
 
 	private static final DateFormat LONG_DF = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
@@ -70,7 +70,7 @@ public class Manager implements Runnable, AddressUser {
 	 * Int window is 1 hr 50 minutes (tighten?)
 	 */
 	private static final long INT_WINDOW_SEC = 60 * 60 * 2 - 10 * 60;
-	private static final int UNSOL_SIZE = 100;
+	private static final int UNSOL_SIZE = 10;
 
 	private static final boolean BULKY_STATUS = false;
 	private static final boolean HUMAN_READABLE_DATE = false;
@@ -103,8 +103,8 @@ public class Manager implements Runnable, AddressUser {
 		}
 		String logName = Manager.getTimestamp();
 		this.runLog = new RotatingLogger(Manager.LOG_DIR, true);
-		this.exceptionLog = new ThreadedWriter(Manager.EX_DIR + logName + "-err", true);
-		this.myLogLevel = Manager.DEBUG_LOG_LEVEL;
+		this.exceptionLog = new ThreadedWriter(new File(Manager.EX_DIR, logName + "-err"), true);
+		this.myLogLevel = Manager.CRIT_LOG_LEVEL;
 		Thread loggingThread = new Thread(this.runLog, "general-logging");
 		Thread exceptionThread = new Thread(this.exceptionLog, "exception-logging");
 		loggingThread.setName("Logging thread.");
