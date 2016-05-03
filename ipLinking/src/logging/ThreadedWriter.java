@@ -56,7 +56,7 @@ public class ThreadedWriter extends Writer implements Runnable {
 		boolean writeableString = true;
 		try {
 			String currentStr = this.internalQueue.take();
-			writeableString = currentStr.equals(ThreadedWriter.POISON_PILL);
+			writeableString = !(currentStr.equals(ThreadedWriter.POISON_PILL));
 			if (writeableString) {
 				this.actualOutput.write(currentStr);
 				if (this.autoFlush) {
