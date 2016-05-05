@@ -42,6 +42,8 @@ public class Manager implements Runnable, AddressUser {
 	private HashMap<SanatizedRecord, PeerRecord> records;
 	private HashMap<SanatizedRecord, Peer> peerObjs;
 
+	private HashSet<String> interestingIPSet;
+
 	private ConnectionTester connTester;
 	private Thread connTesterThread;
 	private AddressHarvest addrHarvester;
@@ -53,9 +55,10 @@ public class Manager implements Runnable, AddressUser {
 
 	public static Random insecureRandom = new Random();
 
+	public static final File LOG_DIR = new File("logs/");
 	private static final String RECOVER_DIR = "recovery/";
-	private static final File LOG_DIR = new File("logs/");
 	private static final File EX_DIR = new File("errors/");
+	private static final String INTERESTED_IP_FILE_PATH = "intIP.txt";
 
 	private static final DateFormat LONG_DF = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 	private static final long STATUSREPORT_INTERVAL_SEC = 120;
@@ -70,7 +73,7 @@ public class Manager implements Runnable, AddressUser {
 	 * Int window is 1 hr 50 minutes (tighten?)
 	 */
 	private static final long INT_WINDOW_SEC = 60 * 60 * 2 - 10 * 60;
-	private static final int UNSOL_SIZE = 100;
+	private static final int UNSOL_SIZE = 10;
 
 	private static final boolean BULKY_STATUS = false;
 	private static final boolean HUMAN_READABLE_DATE = false;
@@ -91,6 +94,7 @@ public class Manager implements Runnable, AddressUser {
 		 */
 		this.records = new HashMap<SanatizedRecord, PeerRecord>();
 		this.peerObjs = new HashMap<SanatizedRecord, Peer>();
+		this.interestingIPSet = new HashSet<String>();
 
 		/*
 		 * Logging
@@ -103,8 +107,8 @@ public class Manager implements Runnable, AddressUser {
 		}
 		String logName = Manager.getTimestamp();
 		this.runLog = new RotatingLogger(Manager.LOG_DIR, true);
-		this.exceptionLog = new ThreadedWriter(Manager.EX_DIR + logName + "-err", true);
-		this.myLogLevel = Manager.DEBUG_LOG_LEVEL;
+		this.exceptionLog = new ThreadedWriter(new File(Manager.EX_DIR, logName + "-err"), true);
+		this.myLogLevel = Manager.CRIT_LOG_LEVEL;
 		Thread loggingThread = new Thread(this.runLog, "general-logging");
 		Thread exceptionThread = new Thread(this.exceptionLog, "exception-logging");
 		loggingThread.setName("Logging thread.");
@@ -307,6 +311,13 @@ public class Manager implements Runnable, AddressUser {
 				this.logEvent("CONNPOINT," + remotePeer.toString() + "," + incRecord.toString() + ","
 						+ incRecord.getTS() + "," + tPeer.getClockSkewGuess(), Manager.CRIT_LOG_LEVEL);
 			}
+			
+			synchronized (this.interestingIPSet) {
+				if (this.interestingIPSet.contains(incRecord.toString())) {
+					this.logEvent("INTIP," + remotePeer.toString() + "," + incRecord.toString() + "," + incRecord.getTS(),
+							Manager.CRIT_LOG_LEVEL);
+				}
+			}
 		}
 	}
 
@@ -493,6 +504,26 @@ public class Manager implements Runnable, AddressUser {
 			if (!this.addrHarvestThread.isAlive()) {
 				this.logException(new RuntimeException("HARVEST THREAD DIED!"));
 				this.bluePill();
+			}
+
+			File intFile = new File(Manager.INTERESTED_IP_FILE_PATH);
+			if (intFile.exists()) {
+				try {
+					BufferedReader inBuff = new BufferedReader(new FileReader(intFile));
+					String line = null;
+					synchronized (this.interestingIPSet) {
+						this.interestingIPSet.clear();
+						while ((line = inBuff.readLine()) != null) {
+							line = line.trim();
+							if (line.length() > 0) {
+								this.interestingIPSet.add(line);
+							}
+						}
+					}
+					inBuff.close();
+				} catch (IOException e) {
+					this.logException(e);
+				}
 			}
 
 			/*

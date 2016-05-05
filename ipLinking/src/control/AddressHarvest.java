@@ -18,7 +18,7 @@ public class AddressHarvest implements Runnable {
 
 	private Semaphore waitSem;
 
-	private static final long NORMAL_RESTART_INTERVAL_SEC = 60;
+	private static final long NORMAL_RESTART_INTERVAL_SEC = 30;
 
 	public AddressHarvest(Manager parent) {
 		this.myParent = parent;
