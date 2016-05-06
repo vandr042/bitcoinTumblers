@@ -1401,6 +1401,15 @@ public class Peer extends PeerSocketHandler {
 		}
 
 		/*
+		 * Phone home with the transactions
+		 */
+		this.addrLock.lock();
+		if (this.addressConsumer != null) {
+			this.addressConsumer.getInventory(transactions, this);
+		}
+		this.addrLock.unlock();
+
+		/*
 		 * MJS LOBOTOMIZE THIS SINCE WE'RE NOT ACTUALLY A CLIENT
 		 */
 		if (Peer.LOBOTOMIZE) {

@@ -13,6 +13,15 @@ def runSim(inputKeys, outputKeyMap):
     currBalance = {}
     outFP = open("balance-synth.log", "w")
     groundFP = open("balance-ground-truth.log", "w")
+    keyFP = open("balance-keys.log", "w")
+    for tDepKey in outputKeyMap:
+        outStr = tDepKey + ":"
+        for tWithKey in outputKeyMap[tDepKey]:
+            outStr = outStr + tWithKey + ","
+        outStr = outStr[:len(outStr) - 1]
+        outStr = outStr + "\n"
+        keyFP.write(outStr)
+    keyFP.close()
     eventMap = {}
     for tIn in inputKeys:
         currBalance[tIn] = 0
@@ -23,7 +32,7 @@ def runSim(inputKeys, outputKeyMap):
             withKey = getRandomWithdrawer(currBalance)
             withAmount = random.randint(1, currBalance[withKey])
             currBalance[withKey] = currBalance[withKey] - withAmount
-            groundFP.write(withKey + "," + str(withAmount) + "," + str(time) + "\n")
+            groundFP.write("W," + withKey + "," + str(withAmount) + "," + str(time) + "\n")
             outKeyList = outputKeyMap[withKey]
             for i in range(len(outKeyList) - 1):
                 if withAmount == 0:
@@ -46,6 +55,7 @@ def runSim(inputKeys, outputKeyMap):
             while time in eventMap:
                 time = time + 1
             eventMap[time] = "deposit," + depKey + "," + str(depAmount) + "," + str(time) + "\n"
+            groundFP.write("D," + depKey + "," + str(depAmount) + "," + str(time) + "\n")
 
     doneSet = set([])
     while len(doneSet) < len(eventMap):
