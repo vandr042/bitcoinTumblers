@@ -3,36 +3,48 @@
 import sys
 import random
 
-OUT_FILE_BASE = "mjsFull"
+OUT_FILE_BASE = "synth1000-8-8-300-300-20-100"
 DELAY_FILE = "delays-10.txt"
 
 NUMBER_PUBLIC_PEERS = 6000
 NUMBER_PRIVATE_PEERS = 30000
 
-MIN_PEERS_KNOWN = 4
-MAX_PEERS_KNOWN = 7
-MAX_PEERS = 7
+MIN_FALSE_POSITIVE = 300
+MAX_FALSE_POSITIVE = 300
+MIN_PEERS_KNOWN = 8
+MAX_PEERS_KNOWN = 8
+MAX_PEERS = 8
+
+MAX_NET_JITTER = 100
+MIN_NET_JITTER = 20
+
+TX_SAMPLE_SIZE = 1000
 
 def main():
     fullNodeList = list(genIPSet(NUMBER_PUBLIC_PEERS + NUMBER_PRIVATE_PEERS))
     pubList = fullNodeList[0:NUMBER_PUBLIC_PEERS]
     privList = fullNodeList[NUMBER_PUBLIC_PEERS:]
+    print("done with node creation")
     privConnMap = genGroundTruth(pubList, privList)
+    print("done with node linking")
+    fpMap = genFPMap(pubList, privList, privConnMap)
+    print("done with false positive generation")
     pubConnMap = buildPubConn(privConnMap)
     delayModel = buildDelayModel()
-    runSim(pubList, privList, privConnMap, pubConnMap, delayModel)
+    print("starting sim")
+    runSim(pubList, privList, privConnMap, pubConnMap, fpMap, delayModel)
 
-#TODO re-inflate (mult by 100)
 def buildDelayModel():
     delays = []
     inFP = open(DELAY_FILE)
     for line in inFP:
         if len(line.strip()) > 0:
-            delays.append(int(line))
+            #re-inflate to MS delay
+            delays.append(int(line) * 100)
     inFP.close()
     return delays
     
-def runSim(pubList, privList, privConnMap, pubConnMap, delayModel):
+def runSim(pubList, privList, privConnMap, pubConnMap, fpMap, delayModel):
     outFP = open(OUT_FILE_BASE + "-peer-finder-synth-out.log", "w")
     truthFP = open(OUT_FILE_BASE + "-peer-finder-synth-groundTruth.log", "w")
     currentTime = 0
@@ -45,7 +57,11 @@ def runSim(pubList, privList, privConnMap, pubConnMap, delayModel):
         for i in range(detectCount):
             outFP.write("remoteconn," + tPriv + "," + tList[i] + "," + str(currentTime) + "\n")
             currentTime = currentTime + random.randint(3, 500)
-    for i in range(1000):
+    for tPriv in privList:
+        for tFP in fpMap[tPriv]:
+            outFP.write("remoteconn," + tPriv + "," + tFP + "," + str(currentTime) + "\n")
+            currentTime = currentTime + random.randint(3, 500)
+    for i in range(TX_SAMPLE_SIZE):
         if i % 100 == 0:
             print(str(i))
         currentTime = currentTime + random.randint(1000, 5000)
@@ -89,9 +105,8 @@ def doTx(sendingNode, privConn, pubConn, fp, time, txID, delayModel):
         lastTime = smallestTime
     return lastTime
     
-#TODO add network "jitter" (random number between 20 ms and 500 ms)
 def genTxDelay(delayModel):
-    return random.choice(delayModel)
+    return random.choice(delayModel) + random.randint(MIN_NET_JITTER, MAX_NET_JITTER)
             
         
 
@@ -115,7 +130,20 @@ def genGroundTruth(publicNodes, privateNodes):
             peerSet.add(random.choice(randomPubNodeList))
         retMap[tNode] = peerSet
     return retMap
-    
+
+def genFPMap(publicNodes, privateNodes, connMap):
+    retMap = {}
+    for tNode in privateNodes:
+        connSet = connMap[tNode]
+        falseCount = random.randint(MIN_FALSE_POSITIVE, MAX_FALSE_POSITIVE)
+        falseSet = set([])
+        while len(falseSet) < falseCount:
+            posible = random.choice(publicNodes)
+            if not posible in connSet:
+                falseSet.add(posible)
+        retMap[tNode] = falseSet
+    return retMap
+
 def genIPSet(count):
     retSet = set([])
     while len(retSet) < count:
