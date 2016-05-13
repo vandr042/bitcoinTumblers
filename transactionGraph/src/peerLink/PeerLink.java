@@ -181,7 +181,7 @@ public class PeerLink {
 			j++;
 		}
 		pcpList = pcpList.subList(0, j);
-		mostCommonPeers = new List<String>();
+		mostCommonPeers = new ArrayList<String>();
 		for (PeerCountPair pcp:pcpList){
 			String peer = pcp.getPeer();
 			mostCommonPeers.add(peer);
