@@ -11,7 +11,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.*;
@@ -26,11 +26,11 @@ public class PeerLink {
 	/**
 	 * Mapping from txID to (peer,timestamp peer says it saw tx) pairs
 	 */
-	private HashMap<String, LinkedList<TStampPeerPair>> txMap;
+	private HashMap<String, List<TStampPeerPair>> txMap;
 
 	public PeerLink(String dataFile) throws IOException {
 		pMap = new HashMap<String, HashSet<String>>();
-		txMap = new HashMap<String, LinkedList<TStampPeerPair>>();
+		txMap = new HashMap<String, List<TStampPeerPair>>();
 		buildMapsFromFile(dataFile);
 	}
 
@@ -67,7 +67,7 @@ public class PeerLink {
 	}
 	
 	public HashMap<String,HashSet<String>> findSenderByVoting(String tx, int tStampDepth){
-		LinkedList<TStampPeerPair> tsppList = txMap.get(tx);
+		List<TStampPeerPair> tsppList = txMap.get(tx);
 		Collections.sort(tsppList);
 		HashMap<String,HashSet<String>> mcpSeenByMap = computeMostCommonPeers(tsppList,tStampDepth);
 		return mcpSeenByMap;
@@ -77,7 +77,7 @@ public class PeerLink {
 	 * specified search depth, intersecting the peerConn sets
 	 */
 	private HashSet<String> findSender(String tx, int searchDepth) throws IOException {
-		LinkedList<TStampPeerPair> tsppList = txMap.get(tx);
+		List<TStampPeerPair> tsppList = txMap.get(tx);
 		Collections.sort(tsppList);
 		TStampPeerPair tspp = tsppList.get(0);
 		String peer = tspp.getPeer();
@@ -119,17 +119,17 @@ public class PeerLink {
 	 * \param tStampDepth is a maximum time stamp for which to compute the most common peers
 	 * returns a linked list of the peers containing unique most common peers (different peers seen same # times) in their conn set
 	 */
-	private HashMap<String,HashSet<String>> computeMostCommonPeers(LinkedList<TStampPeerPair>  peers, int tStampDepth){
+	private HashMap<String,HashSet<String>> computeMostCommonPeers(List<TStampPeerPair>  peers, int tStampDepth){
 		int tStampsDeep;
 		List<PeerCountPair> pcpList;			// List private peers and the number of times they are seen			
 		HashMap<String, Integer> peerSeenCount; 	// Map of peers to times seen in order to implement counting
-		LinkedList<String> mostCommonPeers;			// This is a list of the most common peers
+		List<String> mostCommonPeers;			// This is a list of the most common peers
 		HashMap<String, HashSet<String>> mcpSeenBy; // map from the most common peers to a set of the peers who said they saw them
 		
 		
 		tStampsDeep = 0;
 		peerSeenCount = new HashMap<String, Integer>();
-		pcpList = new LinkedList<PeerCountPair>();
+		pcpList = new ArrayList<PeerCountPair>();
 		
 		/**************************************************************
 		 * Populate peerSeenCount with peers and the number of times 
@@ -181,7 +181,7 @@ public class PeerLink {
 			j++;
 		}
 		pcpList = pcpList.subList(0, j);
-		mostCommonPeers = new LinkedList<String>();
+		mostCommonPeers = new ArrayList<String>();
 		for (PeerCountPair pcp:pcpList){
 			String peer = pcp.getPeer();
 			mostCommonPeers.add(peer);
@@ -257,12 +257,12 @@ public class PeerLink {
 				peerConns = pMap.get(toAddr);
 				peerConns.add(addr);
 			} else {
-				LinkedList<TStampPeerPair> tsppList = txMap.get(txID);
+				List<TStampPeerPair> tsppList = txMap.get(txID);
 				if (tsppList != null) {
 					TStampPeerPair tspp = new TStampPeerPair(timeStamp, addr);
 					tsppList.add(tspp);
 				} else {
-					tsppList = new LinkedList<TStampPeerPair>();
+					tsppList = new ArrayList<TStampPeerPair>();
 					TStampPeerPair tspp = new TStampPeerPair(timeStamp, addr);
 					tsppList.add(tspp);
 					txMap.put(txID, tsppList);
@@ -279,7 +279,7 @@ public class PeerLink {
 		return pMap;
 	}
 
-	public HashMap<String, LinkedList<TStampPeerPair>> getTxMap() {
+	public HashMap<String, List<TStampPeerPair>> getTxMap() {
 		return txMap;
 	}
 

@@ -10,7 +10,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -166,6 +165,6 @@ public class PeerLinkTester {
 	//	gogo("allKnown-peer-finder-synth");
 	//	gogo("perfect-peer-finder-synth");
 	//	gogo("zeroRandom-peer-finder-synth");
-		gogo("realDelay-peer-finder-synth");
+		gogo("synth1000-8-8-300-300-20-100-peer-finder-synth");
 	}
 }
