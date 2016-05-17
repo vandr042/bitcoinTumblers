@@ -107,7 +107,7 @@ def doTx(sendingNode, privConn, pubConn, outFPs, time, txID, delayModel):
             connMap = privConn
         else:
             connMap = pubConn
-        for tConnPeer in connMap[tKey]:
+        for tConnPeer in connMap[nextHost]:
             if not tConnPeer in reachTime:
                 timeFromMe = nextTime + genTxDelay(delayModel)
                 if tConnPeer in eventMap:
@@ -131,6 +131,7 @@ def doTx(sendingNode, privConn, pubConn, outFPs, time, txID, delayModel):
             del toMeMap[nextPeer]
             myLastTime = smallest
         lastTime = max(lastTime, myLastTime)
+    print("derp")
     return lastTime
 
 
