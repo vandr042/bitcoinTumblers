@@ -103,7 +103,7 @@ def doTx(sendingNode, privConn, pubConn, outFPs, time, txID, delayModel):
         reachTime[nextHost] = nextTime
         del eventMap[nextHost]
         connMap = None
-        if tKey in privConn:
+        if nextHost in privConn:
             connMap = privConn
         else:
             connMap = pubConn
