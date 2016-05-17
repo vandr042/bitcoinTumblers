@@ -100,20 +100,26 @@ def doTx(sendingNode, privConn, pubConn, outFPs, time, txID, delayModel):
             if eventMap[tKey] < nextTime:
                 nextHost = tKey
                 nextTime = eventMap[tKey]
-        reachTime[nextHost] = nextTime
-        del eventMap[nextHost]
-        connMap = None
-        if nextHost in privConn:
-            connMap = privConn
-        else:
-            connMap = pubConn
-        for tConnPeer in connMap[nextHost]:
-            if not tConnPeer in reachTime:
-                timeFromMe = nextTime + genTxDelay(delayModel)
-                if tConnPeer in eventMap:
-                    eventMap[tConnPeer] = min(timeFromMe, eventMap[tConnPeer])
-                else:
-                    eventMap[tConnPeer] = timeFromMe
+        reachList = []
+        for tKey in eventMap:
+            if eventMap[tKey] - MIN_NET_JITTER <= nextTime:
+                reachList.append(tKey)
+        for tKey in reachList:
+            myTime = eventMap[tKey]
+            reachTime[tKey] = myTime
+            del eventMap[tKey]
+            connMap = None
+            if tKey in privConn:
+                connMap = privConn
+            else:
+                connMap = pubConn
+            for tConnPeer in connMap[tKey]:
+                if not (tConnPeer in reachTime or tConnPeer in reachList):
+                    timeFromMe =  myTime + genTxDelay(delayModel)
+                    if tConnPeer in eventMap:
+                        eventMap[tConnPeer] = min(timeFromMe, eventMap[tConnPeer])
+                    else:
+                        eventMap[tConnPeer] = timeFromMe
     for outFP in outFPs:
         toMeMap = {}
         for tPeer in reachTime:
