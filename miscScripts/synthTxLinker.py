@@ -55,8 +55,8 @@ def writeAll(outFPs, outStr):
 def runSim(pubList, privList, privConnMap, pubConnMap, fpMap, delayModel, outBase):
     outFPs = []
     for i in range(3):
-        outFPs.append(open(outBase + "-peer-finder-synth-out" + str(i) + ".log", "w"))
-    truthFP = open(outBase + "-peer-finder-synth-groundTruth.log", "w")
+        outFPs.append(open(outBase + "txLinkSynth-out" + str(i) + ".log", "w"))
+    truthFP = open(outBase + "-txLinkSynth-groundTruth.log", "w")
     currentTime = 0
     for tPub in pubList:
         writeAll(outFPs, "conn," + tPub + "," + str(currentTime) + "\n")

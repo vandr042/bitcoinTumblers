@@ -154,10 +154,10 @@ public class PeerLinkTester {
 	}
 
 	private static void gogo(String fileBase) throws IOException {
-		PeerLink pl = new PeerLink("../miscScripts/" + fileBase + "-out.log");
-		PeerLinkTester test = new PeerLinkTester(1, pl, 10, "../miscScripts/" + fileBase + "-groundTruth.log", 10);
-		test.testForBestDepth(fileBase.split("-")[0] + ".txt");
-		test.testBestDepthWithVoting(fileBase.split("-")[0] + "Voting" + ".txt");
+		PeerLink pl = new PeerLink(fileBase + "-out0.log");
+		PeerLinkTester test = new PeerLinkTester(1, pl, 10, fileBase + "-groundTruth.log", 10);
+		test.testForBestDepth(fileBase.split("-")[0] + "-intersect.txt");
+		test.testBestDepthWithVoting(fileBase.split("-")[0] + "-voting.txt");
 	}
 
 	public static void main(String[] args) throws IOException {
