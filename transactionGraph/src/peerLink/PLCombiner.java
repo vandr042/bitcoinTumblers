@@ -1,5 +1,8 @@
 package peerLink;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 
 public class PLCombiner {
 	/* mode: 1 for voting 0 for intersection */
@@ -16,7 +19,7 @@ public class PLCombiner {
 		for (int i = 0; i < scriptArr.length-2; i++){
 			if (mode == 0){
 				PeerLink p = new PeerLink(scriptArr[i]);
-				p.sim(depth);
+				HashMap<String, HashSet<String>> hm = p.sim(depth);
 			}else if(mode == 1){
 				PeerLink p = new PeerLink(scriptArr[i]);
 				p.simVoting(depth);
@@ -24,6 +27,16 @@ public class PLCombiner {
 		}
 	}
 	
+	private void combineVoting() throws IOException{
+		for (int i = 0; i < scriptArr.length-2; i++){
+			PeerLink p = new PeerLink(scriptArr[i]);
+			HashMap<String, Set<String>> hm = p.simVoting(depth);
+		}
+	}
+	
+	private void combineIntersection(){
+		
+	}
 	/* 
 	 * Run the combiner from the command line by supplying 
 	 * any number of script arguments followed by the mode
