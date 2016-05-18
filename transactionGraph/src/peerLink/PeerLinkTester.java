@@ -166,6 +166,6 @@ public class PeerLinkTester {
 	//	gogo("allKnown-peer-finder-synth");
 	//	gogo("perfect-peer-finder-synth");
 	//	gogo("zeroRandom-peer-finder-synth");
-		gogo("realDelay-peer-finder-synth");
+		gogo("mjsFull-peer-finder-synth");
 	}
 }

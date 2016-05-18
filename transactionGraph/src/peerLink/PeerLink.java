@@ -59,10 +59,10 @@ public class PeerLink {
 		String[] txArr = new String[txIDs.size()];
 		txIDs.toArray(txArr);
 		for (String tx : txArr) {
-			// bw.write("tx: " + tx + "\n");
+			//bw.write("tx: " + tx + "\n");
 			txToPeersMap.put(tx, this.findSenderByVoting(tx, tStampDepth).keySet());
 		}
-		// bw.close();
+		//bw.close();
 		return txToPeersMap;
 	}
 	
