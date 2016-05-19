@@ -57,7 +57,7 @@ public class PeerLinkTester {
 		}
 		bw.close();
 	}
-	
+
 	public void testBestDepthWithVoting(String outFile) throws IOException {
 		System.out.println("********************************** Testing for Depth ************************************");
 		File f = new File(outFile);
@@ -82,8 +82,8 @@ public class PeerLinkTester {
 		}
 		bw.close();
 	}
-	
-	private float checkVotingAccuracy(HashMap<String, Set<String>> txPeerMap){
+
+	private float checkVotingAccuracy(HashMap<String, Set<String>> txPeerMap) {
 		float accuracy, totalTx, correct;
 		correct = 0;
 		String[] txArr = new String[txPeerMap.keySet().size()];
@@ -154,17 +154,13 @@ public class PeerLinkTester {
 	}
 
 	private static void gogo(String fileBase) throws IOException {
-		PeerLink pl = new PeerLink("../miscScripts/" + fileBase + "-out.log");
-		PeerLinkTester test = new PeerLinkTester(1, pl, 10, "../miscScripts/" + fileBase + "-groundTruth.log",10);
-		test.testForBestDepth(fileBase.split("-")[0] + ".txt");
-		test.testBestDepthWithVoting(fileBase.split("-")[0] + "Voting" + ".txt");
+		PeerLink pl = new PeerLink(fileBase + "-out0.log");
+		PeerLinkTester test = new PeerLinkTester(1, pl, 10, fileBase + "-groundTruth.log", 10);
+		test.testForBestDepth(fileBase.split("-")[0] + "-intersect.txt");
+		test.testBestDepthWithVoting(fileBase.split("-")[0] + "-voting.txt");
 	}
 
 	public static void main(String[] args) throws IOException {
-	//	gogo("peer-finder-synth");
-	//	gogo("allKnown-peer-finder-synth");
-	//	gogo("perfect-peer-finder-synth");
-	//	gogo("zeroRandom-peer-finder-synth");
-		gogo("synth1000-8-8-300-300-20-100-peer-finder-synth");
+		gogo(args[1]);
 	}
 }
