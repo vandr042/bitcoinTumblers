@@ -73,8 +73,17 @@ public class SpyLogCleaner implements Runnable {
 					String peerWeConnnectedTo = tokens[2];
 					String privatePeer = tokens[3];
 					Long ts = Long.parseLong(tokens[4]);
+					prunedStr = readStr;
 					
-					
+					if(!this.connTimeMap.containsKey(peerWeConnnectedTo)){
+						this.connTimeMap.put(peerWeConnnectedTo, new HashMap<String, Long>());
+					}
+					if(this.connTimeMap.get(peerWeConnnectedTo).containsKey(privatePeer)){
+						if(this.connTimeMap.get(peerWeConnnectedTo).get(privatePeer).equals(ts)){
+							prunedStr = null;
+						}
+					}
+					this.connTimeMap.get(peerWeConnnectedTo).put(privatePeer, ts);
 				} else {
 					prunedStr = readStr;
 				}
