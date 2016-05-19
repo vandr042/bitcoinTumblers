@@ -12,6 +12,7 @@ public class SpyLogCleaner implements Runnable {
 	private File parsedDirectory;
 
 	private HashMap<String, Integer> txCountMap;
+	private HashMap<String, HashMap<String, Long>> connTimeMap;
 	private HashSet<String> ignoreSet;
 
 	private static final long CHECK_INTERVAL_MS = 60 * 1000;
@@ -35,6 +36,7 @@ public class SpyLogCleaner implements Runnable {
 		}
 
 		this.txCountMap = new HashMap<String, Integer>();
+		this.connTimeMap = new HashMap<String, HashMap<String, Long>>();
 		this.ignoreSet = new HashSet<String>();
 	}
 
@@ -67,6 +69,12 @@ public class SpyLogCleaner implements Runnable {
 							this.txCountMap.put(txID, newTxCount);
 						}
 					}
+				} else if (tokens[1].equals("CONNPOINT")) {
+					String peerWeConnnectedTo = tokens[2];
+					String privatePeer = tokens[3];
+					Long ts = Long.parseLong(tokens[4]);
+					
+					
 				} else {
 					prunedStr = readStr;
 				}

@@ -68,11 +68,12 @@ public class Manager implements Runnable, AddressUser {
 	public static final int EMERGENCY_LOG_LEVEL = 1;
 	public static final int CRIT_LOG_LEVEL = 2;
 	public static final int DEBUG_LOG_LEVEL = 3;
+	public static final int IGNORE_LOG_LEVEL = Integer.MAX_VALUE;
 
 	/*
 	 * Int window is 1 hr 50 minutes (tighten?)
 	 */
-	private static final long INT_WINDOW_SEC = 60 * 60 * 2 - 10 * 60;
+	private static final long INT_WINDOW_SEC = 60 * 60 * 4;
 	private static final int UNSOL_SIZE = 10;
 
 	private static final boolean BULKY_STATUS = false;
@@ -240,8 +241,9 @@ public class Manager implements Runnable, AddressUser {
 		long now = System.currentTimeMillis();
 		this.logEvent("INVRCV," + arg0.size() + ",from:" + arg1.getAddress().toString(), Manager.DEBUG_LOG_LEVEL);
 		for (InventoryItem tItem : arg0) {
+			//XXX turn logging back on
 			this.logEvent("TX," + tItem.hash.toString() + ",from," + arg1.getAddress().toString() + "," + now,
-					Manager.CRIT_LOG_LEVEL);
+					Manager.IGNORE_LOG_LEVEL);
 		}
 	}
 
@@ -265,7 +267,7 @@ public class Manager implements Runnable, AddressUser {
 						Manager.CRIT_LOG_LEVEL);
 				this.connTester.givePriorityConnectTarget(incPeer);
 			} else {
-				this.solTest(incPeer, fromPeer);
+				this.solTest(incPeer, fromPeer, harvestedAddrs.size());
 			}
 		}
 	}
@@ -301,7 +303,7 @@ public class Manager implements Runnable, AddressUser {
 		}
 	}
 
-	private void solTest(SanatizedRecord incRecord, SanatizedRecord remotePeer) {
+	private void solTest(SanatizedRecord incRecord, SanatizedRecord remotePeer, int messageSize) {
 		// XXX should we log instances of a null peer?
 		Peer tPeer = this.getPeerObject(remotePeer);
 		if (tPeer != null) {
@@ -309,7 +311,7 @@ public class Manager implements Runnable, AddressUser {
 			long theirNowSec = tPeer.convertLocalTimeToThiers(myNowSec);
 			if (theirNowSec - incRecord.getTS() < Manager.INT_WINDOW_SEC) {
 				this.logEvent("CONNPOINT," + remotePeer.toString() + "," + incRecord.toString() + ","
-						+ incRecord.getTS() + "," + tPeer.getClockSkewGuess(), Manager.CRIT_LOG_LEVEL);
+						+ incRecord.getTS() + "," + tPeer.getClockSkewGuess() + "," + messageSize, Manager.CRIT_LOG_LEVEL);
 			}
 			
 			synchronized (this.interestingIPSet) {
