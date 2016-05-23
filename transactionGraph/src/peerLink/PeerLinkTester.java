@@ -33,15 +33,18 @@ public class PeerLinkTester {
 	 * testForBestDepth runs PeerLink.sim for a specified number of different
 	 * depths and outputs the accuracies to file
 	 */
-	public void testForBestDepth(String outFile) throws IOException {
+	public void testForBestDepth(String fileBase) throws IOException {
 		System.out.println("********************************** Testing for Depth ************************************");
-		File f = new File(outFile);
+		File f = new File(fileBase.split("-")[0] + "-intersection.txt");
+		File PLOut = new File(fileBase.split("-")[0] + "-PLIntersectionMap.txt");
 		BufferedWriter bw = new BufferedWriter(new FileWriter(f));
 		for (int searchDepth = depthStep; searchDepth < maxDepth; searchDepth += depthStep) {
 			double avgSetSize, accuracy, totalSets, numPeers, nonZeroCount;
 			numPeers = 0;
 			nonZeroCount = 0;
 			HashMap<String, HashSet<String>> txToPeers = peerLink.sim(searchDepth);
+			printPLMapIntersection(PLOut, txToPeers);
+			
 			Collection<HashSet<String>> peers = txToPeers.values();
 			for (HashSet<String> pset : peers) {
 				numPeers += pset.size();
@@ -58,15 +61,18 @@ public class PeerLinkTester {
 		bw.close();
 	}
 
-	public void testBestDepthWithVoting(String outFile) throws IOException {
+	public void testBestDepthWithVoting(String fileBase) throws IOException {
 		System.out.println("********************************** Testing for Depth ************************************");
-		File f = new File(outFile);
+		File f = new File(fileBase.split("-")[0] + "-voting.txt");
+		File PLOut = new File(fileBase.split("-")[0] + "-PLVotingMap.txt");
 		BufferedWriter bw = new BufferedWriter(new FileWriter(f));
+		
 		for (int searchDepth = depthStep; searchDepth <= tStampDepth; searchDepth += depthStep) {
 			double avgSetSize, accuracy, totalSets, numPeers, nonZeroCount;
 			numPeers = 0;
 			nonZeroCount = 0;
 			HashMap<String, Set<String>> txToPeers = peerLink.simVoting(searchDepth);
+			printPLMapVoting(PLOut, txToPeers);
 			Collection<Set<String>> peers = txToPeers.values();
 			for (Set<String> pset : peers) {
 				numPeers += pset.size();
@@ -117,6 +123,35 @@ public class PeerLinkTester {
 		accuracy = correct / totalTx;
 		return accuracy;
 	}
+	
+	private void printPLMapVoting(File outFile, HashMap<String, Set<String>> txToPeerMap) throws IOException{
+		BufferedWriter PLwriter = new BufferedWriter(new FileWriter(outFile));
+		Set<String> txSet = txToPeerMap.keySet();
+		Set<String> peerSet;
+		for (String tx: txSet){
+			PLwriter.write(tx);
+			peerSet = txToPeerMap.get(tx);
+			for (String peer: peerSet){
+				PLwriter.write("," + peer);
+			}
+			PLwriter.write("\n");
+		}
+	}
+	
+	private void printPLMapIntersection(File outFile, HashMap<String, HashSet<String>> txToPeerMap) throws IOException{
+		BufferedWriter PLwriter = new BufferedWriter(new FileWriter(outFile));
+		Set<String> txSet = txToPeerMap.keySet();
+		HashSet<String> peerSet;
+		for (String tx: txSet){
+			PLwriter.write(tx);
+			peerSet = txToPeerMap.get(tx);
+			for (String peer: peerSet){
+				PLwriter.write("," + peer);
+			}
+			PLwriter.write("\n");
+		}
+	}
+	
 
 	/* called in constructor to build truth map */
 	private void buildMapFromTruth(String filename) throws IOException {
@@ -154,13 +189,13 @@ public class PeerLinkTester {
 	}
 
 	private static void gogo(String fileBase) throws IOException {
-		PeerLink pl = new PeerLink(fileBase + "-out0.log");
+		PeerLink pl = new PeerLink(fileBase + "-out.log");
 		PeerLinkTester test = new PeerLinkTester(1, pl, 10, fileBase + "-groundTruth.log", 10);
-		test.testForBestDepth(fileBase.split("-")[0] + "-intersect.txt");
-		test.testBestDepthWithVoting(fileBase.split("-")[0] + "-voting.txt");
+		test.testForBestDepth(fileBase);
+		test.testBestDepthWithVoting(fileBase);
 	}
 
 	public static void main(String[] args) throws IOException {
-		gogo(args[1]);
+		gogo("../../../miscScripts/mjsFull-peer-finder-synth");
 	}
 }

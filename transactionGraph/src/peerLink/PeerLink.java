@@ -28,7 +28,7 @@ public class PeerLink {
 	 * Mapping from txID to (peer,timestamp peer says it saw tx) pairs
 	 */
 	private HashMap<String, List<TStampPeerPair>> txMap;
-
+	
 	public PeerLink(String dataFile) throws IOException {
 		pMap = new HashMap<String, HashSet<String>>();
 		txMap = new HashMap<String, List<TStampPeerPair>>();

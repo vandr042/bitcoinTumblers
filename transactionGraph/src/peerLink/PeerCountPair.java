@@ -2,7 +2,7 @@ package peerLink;
 
 
 /*
- * This class is an ordered pair of 
+ * This class is an ordered pair of peers and the number of times they have been heard from on the network 
  */
 public class PeerCountPair implements Comparable<PeerCountPair>{
 	
