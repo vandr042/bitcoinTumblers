@@ -5,7 +5,9 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.Reader;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -13,6 +15,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.Arrays;
 
 public class PLCombiner {
 	/* mode: 1 for voting 0 for intersection */
@@ -39,7 +42,7 @@ public class PLCombiner {
 	}
 	
 	private void combineVoting() throws IOException{
-		for (int i = 0; i < scriptArr.length-2; i++){
+		for (int i = 0; i < scriptArr.length-3; i++){
 			HashMap<String, PeerCountPair> peerToPCP;
 			String txID;
 			File f = new File(scriptArr[i]);
@@ -80,27 +83,27 @@ public class PLCombiner {
 		/* Find the most common peers */ 
 		Set<String> transactions = txToPeers.keySet();
 		int highCount, currCount, j;
-		j= 1;
+
 		for (String tx: transactions){
 			List<String> mostCommonPeers;
 			HashMap<String, PeerCountPair> pcpMap = txToPeers.get(tx);
-			List<PeerCountPair> counts = (ArrayList<PeerCountPair>)pcpMap.values();
-			Collections.sort(counts);
-
-			
-			highCount = currCount = counts.get(0).getCount();
-			while (currCount == highCount && j < counts.size()){
-				currCount = counts.get(j).getCount();
+			Collection counts = pcpMap.values();
+			List<PeerCountPair> peers = new ArrayList<PeerCountPair>(counts);
+			highCount = currCount = peers.get(0).getCount();
+			j= 1;
+			while (currCount == highCount && j < peers.size()){
+				currCount = peers.get(j).getCount();
 				j++;
 			}
-			counts = counts.subList(0, j);
+			peers = peers.subList(0, j);
 			mostCommonPeers = new ArrayList<String>();
-			for (PeerCountPair pcp:counts){
+			for (PeerCountPair pcp:peers){
 				String peer = pcp.getPeer();
 				mostCommonPeers.add(peer);
 			}
 			this.writeResults(tx, mostCommonPeers);
 		}
+		bw.close();
 		
 	}
 
@@ -122,7 +125,7 @@ public class PLCombiner {
 	 * and the search depth, in that order.
 	 */
 	public static void main(String args[]) throws NumberFormatException, IOException{
-		PLCombiner plc = new PLCombiner(args, Integer.parseInt(args[args.length-2]), Integer.parseInt(args[args.length-1]), "outfile.txt");
-		
+		PLCombiner plc = new PLCombiner(args, Integer.parseInt(args[args.length-3]), Integer.parseInt(args[args.length-2]), args[args.length-1]);
+		plc.combine();
 	}
 }
