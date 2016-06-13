@@ -1,42 +1,49 @@
 #!/usr/bin/env python3
 
+import sys
 import re
 import numpy as np
 import matplotlib.pyplot as plt
 from dateutil.parser import parse
 from matplotlib.dates import HourLocator, DateFormatter
 
-LOG_FILE = "../2016-01-13T17:16:01"
-WORKED_PAT = re.compile("(.+),worked .+")
-FAILED_PAT = re.compile("(.+),failed .+")
+WORKED_PAT = re.compile("(.+),conn,.+")
+FAILED_PAT = re.compile("(.+),tcpfailed,.+")
 
 def main():
-    plotMe(WORKED_PAT, "../uniqueWorking.pdf", "Unique Working Nodes")
-    plotMe(FAILED_PAT, "../failedConns.pdf", "Failed Connection Attempts")
+    print("on working")
+    plotMe(WORKED_PAT, "../uniqueWorking.pdf", "Unique Working Nodes", ",conn,")
+    print("on failed")
+    plotMe(FAILED_PAT, "../failedConns.pdf", "Failed Connection Attempts", "tcpfailed")
 
 
-def plotMe(pat, outFile, titleStr):
+def plotMe(pat, outFile, titleStr, sigWord):
     times = []
     values = []
     cur = 0
-    fp = open(LOG_FILE, "r")
+    startTime = -1
+    fp = open(sys.argv[1], "r")
     for line in fp:
-        matcher = pat.search(line)
-        if matcher:
-            cur = cur + 1
-            times.append(parse(matcher.group(1))) 
-            values.append(cur)
+        if sigWord in line:
+            matcher = pat.search(line)
+            if matcher:
+                cur = cur + 1
+                ts = float(matcher.group(1)) / (3600.0 * 1000.0)
+                if startTime == -1:
+                    startTime = ts
+                times.append(ts - startTime)
+                values.append(cur)
     fp.close()
     print(str(len(times)))
     curFig = plt.figure()
     ax = plt.subplot(111)
     ax.plot(times, values, figure=curFig, lw=5.0)
-    hours = HourLocator()
-    hourFmt = DateFormatter('%H')
-    ax.xaxis.set_major_locator(hours)
-    ax.xaxis.set_major_formatter(hourFmt)
+#    hours = HourLocator()
+#    hourFmt = DateFormatter('%H')
+#    ax.xaxis.set_major_locator(hours)
+#    ax.xaxis.set_major_formatter(hourFmt)
     plt.title(titleStr)
-    plt.xlabel("Time (Hours starting 13 Jan)")
+    plt.xlabel("Hours Since Start")
     plt.ylabel("Nodes")
     curFig.savefig(outFile, format="pdf")
 
