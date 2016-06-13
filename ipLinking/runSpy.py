@@ -38,7 +38,7 @@ def compile():
     print("done compiling")
 
 def runPrune():
-    procArgs = ["java", "-cp", JAR_STR + ":" + BUILD_DEST, "-d64", "analysis.SpyLogCleaner"]
+    procArgs = ["java", "-Xmx6G", "-cp", JAR_STR + ":" + BUILD_DEST, "-d64", "analysis.SpyLogCleaner"]
     subprocess.Popen(procArgs)
     
 def run(restart):
