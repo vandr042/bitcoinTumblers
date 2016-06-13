@@ -241,7 +241,7 @@ public class Manager implements Runnable, AddressUser {
 		long now = System.currentTimeMillis();
 		this.logEvent("INVRCV," + arg0.size() + ",from:" + arg1.getAddress().toString(), Manager.DEBUG_LOG_LEVEL);
 		for (InventoryItem tItem : arg0) {
-			//XXX turn logging back on
+			// XXX turn logging back on
 			this.logEvent("TX," + tItem.hash.toString() + ",from," + arg1.getAddress().toString() + "," + now,
 					Manager.IGNORE_LOG_LEVEL);
 		}
@@ -304,23 +304,23 @@ public class Manager implements Runnable, AddressUser {
 	}
 
 	private void solTest(SanatizedRecord incRecord, SanatizedRecord remotePeer, int messageSize) {
-		// XXX should we log instances of a null peer?
-		Peer tPeer = this.getPeerObject(remotePeer);
-		if (tPeer != null) {
-			long myNowSec = System.currentTimeMillis() / 1000;
-			long theirNowSec = tPeer.convertLocalTimeToThiers(myNowSec);
-			if (theirNowSec - incRecord.getTS() < Manager.INT_WINDOW_SEC) {
-				this.logEvent("CONNPOINT," + remotePeer.toString() + "," + incRecord.toString() + ","
-						+ incRecord.getTS() + "," + tPeer.getClockSkewGuess() + "," + messageSize, Manager.CRIT_LOG_LEVEL);
-			}
-			
-			synchronized (this.interestingIPSet) {
-				if (this.interestingIPSet.contains(incRecord.toString())) {
-					this.logEvent("INTIP," + remotePeer.toString() + "," + incRecord.toString() + "," + incRecord.getTS(),
-							Manager.CRIT_LOG_LEVEL);
-				}
+		long myNowSec = System.currentTimeMillis() / 1000;
+
+		/*
+		 * Check if the TS is within the window (currently 4 hours)
+		 */
+		if (myNowSec - incRecord.getTS() < Manager.INT_WINDOW_SEC) {
+			this.logEvent("CONNPOINT," + remotePeer.toString() + "," + incRecord.toString() + "," + incRecord.getTS()
+					+ "," + messageSize, Manager.CRIT_LOG_LEVEL);
+		}
+
+		synchronized (this.interestingIPSet) {
+			if (this.interestingIPSet.contains(incRecord.toString())) {
+				this.logEvent("INTIP," + remotePeer.toString() + "," + incRecord.toString() + "," + incRecord.getTS(),
+						Manager.CRIT_LOG_LEVEL);
 			}
 		}
+
 	}
 
 	public PeerRecord getRecord(SanatizedRecord tRec) {
