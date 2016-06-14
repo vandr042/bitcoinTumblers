@@ -44,7 +44,7 @@ def buildDelayModel():
     for line in inFP:
         if len(line.strip()) > 0:
             #re-inflate to MS delay
-            delays.append(int(line))
+            delays.append(int(float(line)))
     inFP.close()
     return delays
 
@@ -73,26 +73,28 @@ def runSim(pubList, privList, privConnMap, pubConnMap, fpMap, delayModel, outBas
             #TODO should False Positives be independent?
             writeAll(outFPs, "remoteconn," + tPriv + "," + tFP + "," + str(currentTime) + "\n")
             currentTime = currentTime + random.randint(3, 500)
+    frontList = []
     for i in range(TX_SAMPLE_SIZE):
-        if i % 100 == 0:
-            print(str(i))
         currentTime = currentTime + random.randint(1000, 5000)
         sendingPeer = privList[random.randint(0, len(privList) - 1)]
         txID = str(random.getrandbits(32))
         truthFP.write(sendingPeer + "," + txID + "," + str(currentTime) + "\n")
-        currentTime = doTx(sendingPeer, privConnMap, pubConnMap, outFPs, currentTime, txID, delayModel)
+        frontList.append(doTx(sendingPeer, privConnMap, pubConnMap, outFPs, txID, delayModel))
     truthFP.close()
     for outFP in outFPs:
         outFP.close()
+    print(str(frontList))
         
 
-def doTx(sendingNode, privConn, pubConn, outFPs, time, txID, delayModel):
+def doTx(sendingNode, privConn, pubConn, outFPs, txID, delayModel):
     eventMap = {}
     reachTime = {}
     lastTime = 0
+    print("******Init Prop Time******")
     for tPeer in privConn[sendingNode]:
-        baseTime = time + genTxDelay(delayModel)
+        baseTime = genTxDelay(delayModel)
         eventMap[tPeer] = baseTime
+        print(tPeer + " " + str(eventMap[tPeer]))
     while len(eventMap) > 0:
         nextHost = None
         nextTime = 999999999999
@@ -120,12 +122,41 @@ def doTx(sendingNode, privConn, pubConn, outFPs, time, txID, delayModel):
                         eventMap[tConnPeer] = min(timeFromMe, eventMap[tConnPeer])
                     else:
                         eventMap[tConnPeer] = timeFromMe
-    for outFP in outFPs:
+    print("*******Direct Node Reach*****")
+    for tPeer in privConn[sendingNode]:
+        print(tPeer + " " + str(reachTime[tPeer]))
+    print("******First ten reached*****")
+    firstTenSet = set([])
+    numFromFront = 0
+    currentlyGoing = True
+    for i in range(0, 10):
+        smallest = 999999999999
+        nextPeer = None
+        for tPeer in reachTime:
+            if tPeer in firstTenSet:
+                continue
+            if tPeer in privConn:
+                continue
+            if reachTime[tPeer] < smallest:
+                smallest = reachTime[tPeer]
+                nextPeer = tPeer
+        toPrintStr = str(i) + ": " + nextPeer + " " + str(reachTime[nextPeer])
+        if nextPeer in privConn[sendingNode]:
+            toPrintStr = toPrintStr + " !!!!!"
+            if currentlyGoing:
+                numFromFront = numFromFront + 1
+        elif currentlyGoing:
+            currentlyGoing = False
+        print(toPrintStr)
+        firstTenSet.add(nextPeer)
+    #monitor points
+    for i in range(0, 3):
+        print("******VP: " + str(i) + "*****")
+        reachList = []
         toMeMap = {}
         for tPeer in reachTime:
             if tPeer in pubConn:
                 toMeMap[tPeer] = reachTime[tPeer] + genTxDelay(delayModel)
-        myLastTime = 0
         while len(toMeMap) > 0:
             nextPeer = None
             smallest = 99999999999
@@ -133,16 +164,22 @@ def doTx(sendingNode, privConn, pubConn, outFPs, time, txID, delayModel):
                 if toMeMap[tPeer] < smallest:
                     smallest = toMeMap[tPeer]
                     nextPeer = tPeer
-            outFP.write("tx," + txID + "," + nextPeer + "," + str(smallest) + "\n")
+            inGT = nextPeer in privConn[sendingNode]
+            if len(reachList) < 10 or inGT:
+                toPrintStr = str(len(reachList) + 1) + " " + nextPeer + " " + str(toMeMap[nextPeer])
+                if inGT:
+                    toPrintStr = toPrintStr + " !!!!"
+                print(toPrintStr)
+            reachList.append(nextPeer)
             del toMeMap[nextPeer]
-            myLastTime = smallest
-        lastTime = max(lastTime, myLastTime)
-    return lastTime
+    return numFromFront
+
 
 
 #TODO add in "fast broadcast" chance    
 def genTxDelay(delayModel):
     return random.choice(delayModel) + random.randint(MIN_NET_JITTER, MAX_NET_JITTER)
+    #return random.randint(MIN_NET_JITTER, MAX_NET_JITTER)
             
         
 
