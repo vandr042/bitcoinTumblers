@@ -8,18 +8,20 @@ import random
 DELAY_FILE = "delay-5Avg.txt"
 
 NUMBER_PUBLIC_PEERS = 6000
-NUMBER_PRIVATE_PEERS = 30000
+NUMBER_PRIVATE_PEERS = 15000
 
-MIN_FALSE_POSITIVE = 300
-MAX_FALSE_POSITIVE = 300
+MIN_FALSE_POSITIVE = 0
+MAX_FALSE_POSITIVE = 0
 MIN_PEERS_KNOWN = 8
 MAX_PEERS_KNOWN = 8
 MAX_PEERS = 8
 
-MAX_NET_JITTER = 100
+MAX_NET_JITTER = 80
 MIN_NET_JITTER = 20
 
-TX_SAMPLE_SIZE = 1000
+TX_SAMPLE_SIZE = 1
+
+VANTAGE_POINT_COUNT = 3
 
 
 #TODO add in connections between public nodes
@@ -54,7 +56,7 @@ def writeAll(outFPs, outStr):
 
 def runSim(pubList, privList, privConnMap, pubConnMap, fpMap, delayModel, outBase):
     outFPs = []
-    for i in range(3):
+    for i in range(VANTAGE_POINT_COUNT):
         outFPs.append(open(outBase + "-txLinkSynth-out" + str(i) + ".log", "w"))
     truthFP = open(outBase + "-txLinkSynth-groundTruth.log", "w")
     currentTime = 0
@@ -143,6 +145,7 @@ def doTx(sendingNode, privConn, pubConn, outFPs, txID, delayModel):
         toPrintStr = str(i) + ": " + nextPeer + " " + str(reachTime[nextPeer])
         if nextPeer in privConn[sendingNode]:
             toPrintStr = toPrintStr + " !!!!!"
+            #counts the number of public nodes, starting with the first, to see the message first
             if currentlyGoing:
                 numFromFront = numFromFront + 1
         elif currentlyGoing:
@@ -150,7 +153,7 @@ def doTx(sendingNode, privConn, pubConn, outFPs, txID, delayModel):
         print(toPrintStr)
         firstTenSet.add(nextPeer)
     #monitor points
-    for i in range(0, 3):
+    for i in range(0, VANTAGE_POINT_COUNT):
         print("******VP: " + str(i) + "*****")
         reachList = []
         toMeMap = {}
@@ -235,6 +238,9 @@ if __name__ == "__main__":
     parser.add_argument("--min_fp", help = "Min false positives", required = False, type=int, default = MIN_FALSE_POSITIVE)
     parser.add_argument("--max_fp", help = "Max false positives", required = False, type = int, default = MAX_FALSE_POSITIVE)
     parser.add_argument("--sample_size", help = "Sample size", required=False, type = int, default=TX_SAMPLE_SIZE)
+    parser.add_argument("--vp_count", help = "Vantage Point Count", required=False, type = int, default=VANTAGE_POINT_COUNT)
+    parser.add_argument("--pub_count", help = "Number of publically reachable pers", required=False, type = int, default = NUMBER_PUBLIC_PEERS)
+    parser.add_argument("--priv_count", help = "Number of private peers", required = False, type = int, default = NUMBER_PRIVATE_PEERS)
     args = parser.parse_args()
 
     MIN_NET_JITTER = args.min_jitter
@@ -242,5 +248,8 @@ if __name__ == "__main__":
     MIN_FALSE_POSITIVE = args.min_fp
     MAX_FALSE_POSITIVE = args.max_fp
     TX_SAMPLE_SIZE = args.sample_size
+    VANTAGE_POINT_COUNT = args.vp_count
+    NUMBER_PUBLIC_PEERS = args.pub_count
+    NUMBER_PRIVATE_PEERS = args.priv_count
     
     main(args.out)
