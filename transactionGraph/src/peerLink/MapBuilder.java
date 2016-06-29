@@ -12,15 +12,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class MapBuilder {
-	public static void buildMapFromLogs(String folder,HashMap<String, HashSet<String>> pMap, HashMap<String, List<TStampPeerPair>> txMap){
+	public static void buildMapFromLogs(String folder,HashMap<String, HashSet<String>> pMap, HashMap<String, List<TStampPeerPair>> txMap) throws IOException{
 		File logDir = new File(folder);
 		File[] contents = logDir.listFiles();
 		for (File f : contents) {
-			System.out.println(f.getAbsolutePath());
+			buildMap(f, pMap, txMap);
 		}
 	}
-	private static void buildMap(String filename, HashMap<String, HashSet<String>> pMap, HashMap<String, List<TStampPeerPair>> txMap) throws IOException {
-		File f = new File(filename);
+	private static void buildMap(File f, HashMap<String, HashSet<String>> pMap, HashMap<String, List<TStampPeerPair>> txMap) throws IOException {
 		BufferedReader reader = new BufferedReader(new FileReader(f));
 
 		String regex = "(\\w*),(?:(\\d*),)*\\[((?:\\d+\\.*){4})+\\]:\\d*(?:,\\[((?:\\d+\\.*){4})+\\]:\\d*)*,(\\d*)";
@@ -72,9 +71,10 @@ public class MapBuilder {
 		reader.close();
 		System.out.println("Finished building maps...");
 	}
-	/************************************************************/
-	public static void main(String[] args) {
-		buildMapFromLogs("../../../miscScripts/Logs", null, null);
+	/**
+	 * @throws IOException **********************************************************/
+	public static void main(String[] args) throws IOException {
+		buildMapFromLogs("../miscScripts/Logs", null, null);
 
 	}
 
