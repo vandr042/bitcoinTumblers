@@ -71,6 +71,36 @@ public class MapBuilder {
 		reader.close();
 		System.out.println("Finished building maps...");
 	}
+	
+	public static void buildMapFromTruth(String filename, HashMap<String, String> truthTxToPeer) throws IOException {
+		File f = new File(filename);
+		BufferedReader reader = new BufferedReader(new FileReader(f));
+
+		String regex = "\\[((?:\\d+\\.*){4})+\\]:\\d*,(\\d*),(\\d*)";
+		Pattern p = Pattern.compile(regex);
+
+		/* pattern match each line to build tx to peer map */
+		System.out.println("Building maps from file...");
+		String line = reader.readLine();
+		while (line != null) {
+			Matcher m = p.matcher(line);
+			m.matches();
+			String addr = m.group(1);
+			String txID = m.group(2);
+			String timeStamp = m.group(3);
+
+			/*
+			 * System.out.println("txID: " + txID); System.out.println("addr: "
+			 * + addr); System.out.println("time stamp: " + timeStamp);
+			 */
+
+			/* populate maps based on message type */
+			truthTxToPeer.put(txID, addr);
+			line = reader.readLine();
+		}
+		reader.close();
+		// System.out.println("Finished building maps...");
+	}
 	/**
 	 * @throws IOException **********************************************************/
 	public static void main(String[] args) throws IOException {

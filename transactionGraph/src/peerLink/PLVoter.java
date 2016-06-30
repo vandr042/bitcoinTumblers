@@ -27,11 +27,19 @@ public class PLVoter {
 		for (String tx : txSet){
 			doTx(tx, n);
 		}
+		Set<String> keys = txLinks.keySet();
+		for (String k : keys){
+			System.out.println("tx: " + k + " peer: " + txLinks.get(k).get(0).getCount());
+		}
 	}
 	
 	private void doTx(String tx, int n){
 		List<TStampPeerPair> sortedTSPP = sortTSPPList(txMap.get(tx));
 		HashSet<String> firstPeerConns = getFirstPeerConns(sortedTSPP);
+		//for (String p : firstPeerConns){
+		//	System.out.println(p);
+		//}
+		// System.out.println(firstPeerConns.size());
 		List<String> topPeers = (ArrayList<String>) getTopPeers(sortedTSPP, n);
 		List<PeerCountPair> pcpList= (ArrayList<PeerCountPair>) voteAndCheck(topPeers, firstPeerConns);
 		txLinks.put(tx, pcpList);
@@ -64,7 +72,7 @@ public class PLVoter {
 			/* if peer seen > 1 times and is in the first peers 
 			 * connection set add it to the pcp list 
 			 */
-			if (count > 1 && firstPeerConns.contains(k)){
+			if (firstPeerConns.contains(k)){
 				PeerCountPair pcp = new PeerCountPair(k,count);
 				pcpList.add(pcp);
 			}
@@ -102,7 +110,7 @@ public class PLVoter {
 	}
 	
 	private HashSet<String> getFirstPeerConns(List<TStampPeerPair> tsppList){
-		HashSet<String> fpConns = pMap.get(tsppList.get(0));
+		HashSet<String> fpConns = pMap.get(tsppList.get(0).getPeer());
 		return fpConns;
 	}
 	
@@ -111,8 +119,11 @@ public class PLVoter {
 		return tsppList;
 	}
 	
-	public static void main(String[] args) {
-		// TODO Auto-generated method stub
+	public static void main(String[] args) throws IOException {
+		PLVoter plv = new PLVoter("../miscScripts/Logs");
+		plv.link(10);
+		PLStats pls = new PLStats("../miscScripts/zeroRandom-peer-finder-synth-groundTruth.log");
+		System.out.println(pls.checkFirstPeerDirConn(plv.txLinks));
 
 	}
 
