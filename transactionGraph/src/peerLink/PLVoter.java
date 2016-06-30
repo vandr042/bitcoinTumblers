@@ -124,7 +124,7 @@ public class PLVoter {
 		plv.link(10);
 		PLStats pls = new PLStats("../miscScripts/zeroRandom-peer-finder-synth-groundTruth.log");
 		System.out.println(pls.checkFirstPeerDirConn(plv.txLinks));
-
+		
 	}
 
 }
