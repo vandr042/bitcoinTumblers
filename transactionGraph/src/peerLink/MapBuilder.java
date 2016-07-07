@@ -15,10 +15,15 @@ import java.util.regex.Pattern;
 
 public class MapBuilder {
 	public static void buildMapFromLogs(String folder,HashMap<String, HashSet<String>> pMap, HashMap<String, List<TStampPeerPair>> txMap) throws IOException{
+		int mb = 1024*1024;
 		File logDir = new File(folder);
 		File[] contents = logDir.listFiles();
+		Runtime runtime = Runtime.getRuntime();
 		for (File f : contents) {
 			buildMap(f, pMap, txMap);
+			System.out.println("Free memory: " + runtime.freeMemory()/mb);
+			System.out.println("Total memory: " + runtime.totalMemory()/mb);
+			System.out.println("Max memory: " + runtime.maxMemory()/mb);
 		}
 		serializeMaps(pMap, txMap, "pMap.ser", "txMap.ser");
 	}
@@ -52,7 +57,6 @@ public class MapBuilder {
 		Pattern p = Pattern.compile(regex);
 
 		/* pattern match each line to build peer map */
-		System.out.println("Building maps from file...");
 		String line = reader.readLine();
 		while (line != null) {
 			Matcher m = p.matcher(line);
@@ -95,7 +99,6 @@ public class MapBuilder {
 			line = reader.readLine();
 		}
 		reader.close();
-		System.out.println("Finished building maps...");
 	}
 	
 	public static void buildMapFromTruth(String filename, HashMap<String, String> truthTxToPeer) throws IOException {
