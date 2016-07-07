@@ -1,6 +1,8 @@
 package peerLink;
 
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -15,11 +17,16 @@ public class PLVoter {
 	private HashMap<String, List<TStampPeerPair>> txMap;
 	private HashMap<String, List<PeerCountPair>> txLinks;
 	
-	public PLVoter(String dirName) throws IOException{
-		pMap = new HashMap<String, HashSet<String>>();
-		txMap = new HashMap<String, List<TStampPeerPair>>();
+	public PLVoter(String dirName) throws IOException, ClassNotFoundException{
+		pMap = null;
+		txMap = null;
 		txLinks = new HashMap<String, List<PeerCountPair>>();
-		MapBuilder.buildMapFromLogs(dirName, pMap, txMap);
+		FileInputStream f1 = new FileInputStream("pMap.ser");
+		FileInputStream f2 = new FileInputStream("txMap.ser");
+		ObjectInputStream oi1 = new ObjectInputStream(f1);
+		ObjectInputStream oi2 = new ObjectInputStream(f2);
+		pMap = (HashMap<String, HashSet<String>>) oi1.readObject();
+		txMap = (HashMap<String, List<TStampPeerPair>>) oi2.readObject();
 	}
 	
 	public void link(int n){
