@@ -1,9 +1,14 @@
 package peerLink;
 
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.LinkedList;
 
-public class TStampPeerPair implements Comparable<TStampPeerPair> {
+public class TStampPeerPair implements Comparable<TStampPeerPair>, Serializable {
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
 	private long tstamp;
 	private String peer;
 

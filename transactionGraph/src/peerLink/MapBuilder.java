@@ -58,6 +58,10 @@ public class MapBuilder {
 
 		/* pattern match each line to build peer map */
 		String line = reader.readLine();
+		
+		int txCount = 0;
+		String prevId = "";
+		String currId;
 		while (line != null) {
 			Matcher m = p.matcher(line);
 			m.matches();
@@ -86,14 +90,27 @@ public class MapBuilder {
 				peerConns.add(addr);
 			} else {
 				List<TStampPeerPair> tsppList = txMap.get(txID);
+				currId = txID;
 				if (tsppList != null) {
-					TStampPeerPair tspp = new TStampPeerPair(timeStamp, addr);
-					tsppList.add(tspp);
+					if (currId.equals(prevId)){
+						txCount++;
+					}else{
+						prevId = currId;
+						txCount = 1;
+					}
+					
+					if (txCount <= 15){
+						TStampPeerPair tspp = new TStampPeerPair(timeStamp, addr);
+						tsppList.add(tspp);
+					}
+				
 				} else {
 					tsppList = new ArrayList<TStampPeerPair>();
 					TStampPeerPair tspp = new TStampPeerPair(timeStamp, addr);
 					tsppList.add(tspp);
 					txMap.put(txID, tsppList);
+					txCount = 1;
+					prevId = currId;
 				}
 			}
 			line = reader.readLine();
