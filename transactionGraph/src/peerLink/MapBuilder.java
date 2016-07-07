@@ -2,8 +2,10 @@ package peerLink;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -18,7 +20,31 @@ public class MapBuilder {
 		for (File f : contents) {
 			buildMap(f, pMap, txMap);
 		}
+		serializeMaps(pMap, txMap, "pMap.ser", "txMap.ser");
 	}
+	
+	
+	private static void serializeMaps(HashMap<String, HashSet<String>> pMap, HashMap<String, List<TStampPeerPair>> txMap, String peerFile, String txFile){
+		try{
+			FileOutputStream f1 = new FileOutputStream(peerFile);
+			FileOutputStream f2 = new FileOutputStream(txFile);
+			ObjectOutputStream peerOut = new ObjectOutputStream(f1);
+			ObjectOutputStream txOut = new ObjectOutputStream(f2);
+			
+			peerOut.writeObject(pMap);
+			txOut.writeObject(txMap);
+			
+			peerOut.close();
+			txOut.close();
+			f1.close();
+			f2.close();
+			
+			System.out.println("Serialized data was saved.");
+		}catch(IOException i){
+			i.printStackTrace();
+		}
+	}
+	
 	private static void buildMap(File f, HashMap<String, HashSet<String>> pMap, HashMap<String, List<TStampPeerPair>> txMap) throws IOException {
 		BufferedReader reader = new BufferedReader(new FileReader(f));
 
@@ -104,7 +130,9 @@ public class MapBuilder {
 	/**
 	 * @throws IOException **********************************************************/
 	public static void main(String[] args) throws IOException {
-		buildMapFromLogs("../miscScripts/Logs", null, null);
+		HashMap<String, HashSet<String>> peerMap = new HashMap<String, HashSet<String>>();
+		HashMap<String, List<TStampPeerPair>> txMap = new HashMap<String, List<TStampPeerPair>>();
+		buildMapFromLogs("../miscScripts/Logs", peerMap, txMap);
 
 	}
 
