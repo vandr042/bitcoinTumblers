@@ -22,6 +22,9 @@ def main(dirPath, regexStr, printFlag):
             resultList = grepSingleFile(filePath, regexPat)
             gzProc = subprocess.Popen(["gzip", filePath])
             gzProc.wait()
+            if printFlag:
+                for line in resultList:
+                    print(line)
 
 def buildGrepList(dirPath):
     filesInDir = os.listdir(dirPath)
