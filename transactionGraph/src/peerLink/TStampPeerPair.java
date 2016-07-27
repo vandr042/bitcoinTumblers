@@ -40,23 +40,4 @@ public class TStampPeerPair implements Comparable<TStampPeerPair>, Serializable 
 		return this.peer;
 	}
 
-	public static void main(String[] args) {
-		TStampPeerPair tspp = new TStampPeerPair("12345", "12345");
-		TStampPeerPair tspp2 = new TStampPeerPair("12346", "12346");
-		TStampPeerPair tspp3 = new TStampPeerPair("12344", "12346");
-		LinkedList<TStampPeerPair> tsppList = new LinkedList<TStampPeerPair>();
-		tsppList.add(tspp3);
-		tsppList.add(tspp2);
-		tsppList.add(tspp);
-		for (TStampPeerPair tsp : tsppList) {
-			String ts = Long.toString(tsp.getTimeStamp());
-			System.out.println(ts);
-		}
-		Collections.sort(tsppList);
-		for (TStampPeerPair tsp : tsppList) {
-			String ts = Long.toString(tsp.getTimeStamp());
-			System.out.println(ts);
-		}
-
-	}
 }

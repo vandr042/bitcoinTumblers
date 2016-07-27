@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.HashSet;
 
 public class PLStats {
 
@@ -12,22 +13,27 @@ public class PLStats {
 	public PLStats(String filename) throws IOException{
 		MapBuilder.buildMapFromTruth(filename, truthTxToPeer);
 	}
-	public float checkFirstPeerDirConn(HashMap<String, List<PeerCountPair>> txLinks){
-		float totalTx, firstCorrect;
-		totalTx = firstCorrect = 0;
+
+	public int checkFirstPeer(String tx, HashSet<String> conns){
+		if (conns.contains(truthTxToPeer.get(tx))){
+			return 1;
+		}else{ 
+			return 0;
+		}
+	}	
+
+	public float checkLinks(HashMap<String, String> txLinks){
+		float totalTx, correct;
+		totalTx = correct = 0;
 		
 		Set<String> keys = txLinks.keySet();
 		for (String k : keys){
 			totalTx++;
-			if (txLinks.get(k).get(0).getPeer().equals(truthTxToPeer.get(k))){
-				firstCorrect++;
+			String peer = txLinks.get(k);
+			if (peer.compareTo(truthTxToPeer.get(k)) == 0){
+				correct++;
 			}
 		}
-		return (firstCorrect/totalTx);
+		return (correct/totalTx);
 	}
-	public static void main(String[] args) {
-		// TODO Auto-generated method stub
-
-	}
-
 }
