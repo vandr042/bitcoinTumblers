@@ -36,6 +36,7 @@ public class Manager implements Runnable, AddressUser {
 	@SuppressWarnings("unused")
 	private Context bcjContext;
 	private NetworkParameters params;
+	private boolean isVantangePoint;
 
 	private NioClientManager[] nioManagers;
 
@@ -81,6 +82,10 @@ public class Manager implements Runnable, AddressUser {
 	private static final boolean SUPPRESS_EXCESS_STATE = true;
 
 	public Manager(Set<String> recoverySet) throws IOException {
+		this(recoverySet, false);
+	}
+
+	public Manager(Set<String> recoverySet, boolean vantagePoint) throws IOException {
 		/*
 		 * Build the params and context objects which are needed by other data
 		 * structures.
@@ -89,6 +94,7 @@ public class Manager implements Runnable, AddressUser {
 		this.params = MainNetParams.get();
 		this.bcjContext = new Context(params);
 		Peer.lobotomizeMe();
+		this.isVantangePoint = vantagePoint;
 
 		/*
 		 * Internal data structures
@@ -136,11 +142,13 @@ public class Manager implements Runnable, AddressUser {
 		this.logEvent("NIO start done", Manager.EMERGENCY_LOG_LEVEL);
 
 		/*
-		 * Start ze address harvester
+		 * Start ze address harvester assuming we're not just a vantage point
 		 */
-		this.addrHarvester = new AddressHarvest(this);
-		this.addrHarvestThread = new Thread(this.addrHarvester, "Address Harvest Master");
-		this.addrHarvestThread.start();
+		if (!this.isVantangePoint) {
+			this.addrHarvester = new AddressHarvest(this);
+			this.addrHarvestThread = new Thread(this.addrHarvester, "Address Harvest Master");
+			this.addrHarvestThread.start();
+		}
 
 		/*
 		 * Start ze connection tester, WE MUST BE 100% READY FOR LIVE NODES AT
@@ -156,6 +164,17 @@ public class Manager implements Runnable, AddressUser {
 		 */
 		List<PeerAddress> startingList = null;
 		if (recoverySet == null) {
+
+			/*
+			 * We should never ever be in a state where a vantage point is not
+			 * given a list of peers...
+			 */
+			if (this.isVantangePoint) {
+				RuntimeException tExc = new RuntimeException("no peer list given to a vantage point");
+				this.logException(tExc);
+				throw tExc;
+			}
+
 			this.logEvent("DNS bootstrap start", Manager.EMERGENCY_LOG_LEVEL);
 			PeerAddress[] dnsPeers = this.buildDNSBootstrap();
 			this.logEvent("DNS boostrap done", Manager.EMERGENCY_LOG_LEVEL);
@@ -221,7 +240,14 @@ public class Manager implements Runnable, AddressUser {
 		synchronized (this.peerObjs) {
 			this.peerObjs.put(myRecord, thePeer);
 		}
-		this.addrHarvester.giveNewHarvestTarget(myRecord, true);
+
+		/*
+		 * If we're not a vantage point then add this node into the address
+		 * harvester
+		 */
+		if (!this.isVantangePoint) {
+			this.addrHarvester.giveNewHarvestTarget(myRecord, true);
+		}
 	}
 
 	public void cleanupDeadPeer(Peer thePeer) {
@@ -231,7 +257,9 @@ public class Manager implements Runnable, AddressUser {
 			actuallyRemoved = this.peerObjs.remove(tRec) != null;
 		}
 		if (actuallyRemoved) {
-			this.addrHarvester.poisonPeer(tRec);
+			if (!this.isVantangePoint) {
+				this.addrHarvester.poisonPeer(tRec);
+			}
 			this.connTester.giveReconnectTarget(tRec);
 		}
 	}
@@ -241,14 +269,21 @@ public class Manager implements Runnable, AddressUser {
 		long now = System.currentTimeMillis();
 		this.logEvent("INVRCV," + arg0.size() + ",from:" + arg1.getAddress().toString(), Manager.DEBUG_LOG_LEVEL);
 		for (InventoryItem tItem : arg0) {
-			// XXX turn logging back on
 			this.logEvent("TX," + tItem.hash.toString() + ",from," + arg1.getAddress().toString() + "," + now,
-					Manager.IGNORE_LOG_LEVEL);
+					Manager.CRIT_LOG_LEVEL);
 		}
 	}
 
 	@Override
 	public void getAddresses(AddressMessage arg0, Peer arg1) {
+
+		/*
+		 * Vantage points take zero actions and simply ignore all ADDR messages
+		 */
+		if (this.isVantangePoint) {
+			return;
+		}
+
 		this.logEvent("ADDRRCV," + arg0.getAddresses().size() + ",from:" + arg1.getAddress().toString(),
 				Manager.DEBUG_LOG_LEVEL);
 		List<PeerAddress> harvestedAddrs = arg0.getAddresses();
@@ -434,6 +469,13 @@ public class Manager implements Runnable, AddressUser {
 	}
 
 	public void makeRecoveryFile(String file) {
+		/*
+		 * Vantage points are not allowed to update their recovery file
+		 */
+		if(this.isVantangePoint){
+			return;
+		}
+		
 		File baseDir = new File(Manager.RECOVER_DIR);
 
 		/*
@@ -568,6 +610,8 @@ public class Manager implements Runnable, AddressUser {
 		ArgumentParser argParse = ArgumentParsers.newArgumentParser("Manager");
 		argParse.addArgument("--recovery").help("Triggers recover mode start").required(false)
 				.action(Arguments.storeTrue());
+		argParse.addArgument("--vantagepoint").help("Turns on vantage point behavior, disabling peer searches")
+				.required(false).action(Arguments.storeTrue());
 		/*
 		 * Actually parse
 		 */
@@ -580,11 +624,12 @@ public class Manager implements Runnable, AddressUser {
 		}
 
 		Manager self = null;
+		boolean amIVantage = ns.getBoolean("vantagepoint");
 		if (ns.getBoolean("recovery")) {
 			Set<String> recoveryPeerSet = Manager.buildRecoverySet();
-			self = new Manager(recoveryPeerSet);
+			self = new Manager(recoveryPeerSet, amIVantage);
 		} else {
-			self = new Manager(null);
+			self = new Manager(null, amIVantage);
 		}
 
 		Thread selfThread = new Thread(self, "Status Reporting Thread");
