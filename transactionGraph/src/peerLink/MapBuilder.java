@@ -18,16 +18,10 @@ import java.util.regex.Pattern;
 
 public class MapBuilder {
 	public static void buildMapFromLogs(String folder, String filebase, HashMap<String, HashSet<String>> pMap, HashMap<String, Pair<Integer, List<TStampPeerPair>>> txMap) throws IOException{
-		int mb = 1024*1024;
 		File logDir = new File(folder);
 		File[] contents = logDir.listFiles();
-		Runtime runtime = Runtime.getRuntime();
 		for (File f : contents) {
-//			System.out.println(f.getName());
 			buildMap(f, pMap, txMap);
-//			System.out.println("Free memory: " + runtime.freeMemory()/mb);
-//			System.out.println("Total memory: " + runtime.totalMemory()/mb);
-//			System.out.println("Max memory: " + runtime.maxMemory()/mb);
 		}
 		serializeMaps(pMap, txMap, filebase + "pMap.ser", filebase + "txMap.ser");
 	}
@@ -146,24 +140,6 @@ public class MapBuilder {
 		HashMap<String, HashSet<String>> peerMap = new HashMap<String, HashSet<String>>();
 		HashMap<String, Pair<Integer, List<TStampPeerPair>>> txMap = new HashMap<String, Pair<Integer, List<TStampPeerPair>>>();
 		buildMapFromLogs(args[0], args[1], peerMap, txMap);
-//		File f = new File("../../miscScripts/LinkLogs/test100-txLinkSynth-out0.log");
-//		buildMap(f, peerMap, txMap);
-//		serializeMaps(peerMap,txMap, "testpMap.ser", "testtxMap.ser");
-//		HashMap<String, HashSet<String>> pMap  = null;
-//		HashMap<String, List<TStampPeerPair>> tMap = null;
-//		FileInputStream f1 = new FileInputStream("testpMap.ser");
-//		FileInputStream f2 = new FileInputStream("testtxMap.ser");
-//		ObjectInputStream oi1 = new ObjectInputStream(f1);
-//		ObjectInputStream oi2 = new ObjectInputStream(f2);
-//		pMap = (HashMap<String, HashSet<String>>) oi1.readObject();
-//		tMap = (HashMap<String, List<TStampPeerPair>>) oi2.readObject();
-//		ArrayList<TStampPeerPair> tsppList = (ArrayList<TStampPeerPair>) txMap.get("4085841858");
-//		ArrayList<TStampPeerPair> tsppList2 = (ArrayList<TStampPeerPair>) tMap.get("4085841858");
-//		Collections.sort(tsppList);
-//		Collections.sort(tsppList2);
-//		for (int i = 0; i < 15; i++){
-//			System.out.println(tsppList.get(i).getPeer() + " " + tsppList2.get(i).getPeer());
-//		}
 	}
 	
 	public static List<String> getTransactionsFromTruth(String filename) throws IOException {
