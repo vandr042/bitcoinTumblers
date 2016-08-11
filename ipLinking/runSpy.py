@@ -42,7 +42,7 @@ def runPrune():
     subprocess.Popen(procArgs)
     
 def run(restart):
-    procArgs = ["java", "-XX:+UseG1GC","-cp", JAR_STR + ":" + BUILD_DEST, "-Xmx7G", "-d64", BASE_CLASS]
+    procArgs = ["java", "-XX:+UseG1GC","-cp", JAR_STR + ":" + BUILD_DEST, "-Xmx7G", "-d64", BASE_CLASS, "--plMan", "taranis.eecs.utk.edu"]
     if restart:
         procArgs = procArgs + ["--recovery"]
     runProc = subprocess.Popen(procArgs)
