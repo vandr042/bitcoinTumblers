@@ -30,6 +30,7 @@ import net.sourceforge.argparse4j.inf.Namespace;
 import data.PeerRecord;
 import data.SanatizedRecord;
 import logging.*;
+import planetlab.MoveFile;
 
 public class Manager implements Runnable, AddressUser {
 
@@ -37,6 +38,8 @@ public class Manager implements Runnable, AddressUser {
 	private Context bcjContext;
 	private NetworkParameters params;
 	private boolean isVantangePoint;
+	private String plManHost;
+	private String myHostName;
 
 	private NioClientManager[] nioManagers;
 
@@ -71,6 +74,9 @@ public class Manager implements Runnable, AddressUser {
 	public static final int DEBUG_LOG_LEVEL = 3;
 	public static final int IGNORE_LOG_LEVEL = Integer.MAX_VALUE;
 
+	private static final String PL_MAN_USER = "pendgaft";
+	private static final String PL_MAN_ID = "~/.ssh/id_rsa";
+
 	/*
 	 * Int window is 1 hr 50 minutes (tighten?)
 	 */
@@ -81,11 +87,11 @@ public class Manager implements Runnable, AddressUser {
 	private static final boolean HUMAN_READABLE_DATE = false;
 	private static final boolean SUPPRESS_EXCESS_STATE = true;
 
-	public Manager(Set<String> recoverySet) throws IOException {
-		this(recoverySet, false);
+	public Manager(Set<String> recoverySet, String plManager) throws IOException {
+		this(recoverySet, false, plManager);
 	}
 
-	public Manager(Set<String> recoverySet, boolean vantagePoint) throws IOException {
+	public Manager(Set<String> recoverySet, boolean vantagePoint, String plManager) throws IOException {
 		/*
 		 * Build the params and context objects which are needed by other data
 		 * structures.
@@ -95,6 +101,8 @@ public class Manager implements Runnable, AddressUser {
 		this.bcjContext = new Context(params);
 		Peer.lobotomizeMe();
 		this.isVantangePoint = vantagePoint;
+		this.plManHost = plManager;
+		this.myHostName = InetAddress.getLocalHost().getHostName();
 
 		/*
 		 * Internal data structures
@@ -472,10 +480,10 @@ public class Manager implements Runnable, AddressUser {
 		/*
 		 * Vantage points are not allowed to update their recovery file
 		 */
-		if(this.isVantangePoint){
+		if (this.isVantangePoint) {
 			return;
 		}
-		
+
 		File baseDir = new File(Manager.RECOVER_DIR);
 
 		/*
@@ -488,7 +496,7 @@ public class Manager implements Runnable, AddressUser {
 		/*
 		 * Actually dump our current connection state
 		 */
-		File currentRecFile = new File(baseDir, file + "-recovery");
+		File currentRecFile = new File(baseDir, file + "-recovery-" + this.myHostName);
 		try {
 			BufferedWriter outBuff = new BufferedWriter(new FileWriter(currentRecFile));
 			HashMap<SanatizedRecord, Peer> copyOfPeerMap = this.getCopyOfPeerMap();
@@ -508,6 +516,21 @@ public class Manager implements Runnable, AddressUser {
 				tFile.delete();
 			}
 		}
+
+		/*
+		 * If we have a Planetlab Manager then phone home, giving the recovery
+		 * set
+		 */
+		//TODO clean up this directory issue
+		if (this.havePlManager()) {
+			MoveFile fileMover = MoveFile.pushLocalFile(Manager.PL_MAN_USER, Manager.PL_MAN_ID, this.plManHost,
+					currentRecFile.getAbsolutePath(), "/home/pendgaft/btc/recovery");
+			try {
+				fileMover.blockingExecute(10000);
+			} catch (InterruptedException e) {
+				this.logException(e);
+			}
+		}
 	}
 
 	private void bluePill() {
@@ -518,6 +541,10 @@ public class Manager implements Runnable, AddressUser {
 
 		}
 		System.exit(0);
+	}
+
+	private boolean havePlManager() {
+		return this.plManHost != null;
 	}
 
 	@Override
@@ -612,6 +639,8 @@ public class Manager implements Runnable, AddressUser {
 				.action(Arguments.storeTrue());
 		argParse.addArgument("--vantagepoint").help("Turns on vantage point behavior, disabling peer searches")
 				.required(false).action(Arguments.storeTrue());
+		argParse.addArgument("--plMan").help("Informs the node what host is running a planet lab manager")
+				.required(false).type(String.class);
 		/*
 		 * Actually parse
 		 */
@@ -625,11 +654,13 @@ public class Manager implements Runnable, AddressUser {
 
 		Manager self = null;
 		boolean amIVantage = ns.getBoolean("vantagepoint");
+		String plMan = ns.getString("plMan");
+
 		if (ns.getBoolean("recovery")) {
 			Set<String> recoveryPeerSet = Manager.buildRecoverySet();
-			self = new Manager(recoveryPeerSet, amIVantage);
+			self = new Manager(recoveryPeerSet, amIVantage, plMan);
 		} else {
-			self = new Manager(null, amIVantage);
+			self = new Manager(null, amIVantage, plMan);
 		}
 
 		Thread selfThread = new Thread(self, "Status Reporting Thread");
