@@ -11,6 +11,8 @@ public class TimeRotatingHashMap<K, V> {
 
 	private long lastClean;
 	private long cleanIntervalMS;
+	
+	private boolean refreshOnRead;
 
 	public static final long DEFAULT_CLEAN_INTERVAL_MS = 600000;
 
@@ -23,6 +25,11 @@ public class TimeRotatingHashMap<K, V> {
 		this.oldGen = new HashMap<K, V>();
 		this.lastClean = System.currentTimeMillis();
 		this.cleanIntervalMS = cleanInterval;
+		this.refreshOnRead = true;
+	}
+	
+	public void setRefreshOnRead(boolean value){
+		this.refreshOnRead = value;
 	}
 
 	public void put(K theKey, V theValue) {
@@ -51,6 +58,10 @@ public class TimeRotatingHashMap<K, V> {
 			retObj = this.currentGen.get(theKey);
 		} else if (this.oldGen.containsKey(theKey)) {
 			retObj = this.oldGen.get(theKey);
+			if(this.refreshOnRead){
+				this.currentGen.put(theKey, retObj);
+				this.oldGen.remove(theKey);
+			}
 		}
 
 		return retObj;
