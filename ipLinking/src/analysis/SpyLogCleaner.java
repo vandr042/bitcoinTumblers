@@ -1,24 +1,33 @@
 package analysis;
 
 import java.io.*;
+import java.net.InetAddress;
 import java.util.*;
 import java.util.zip.*;
 
 import control.Manager;
+import data.TimeRotatingHashMap;
+import planetlab.MoveFile;
 
 public class SpyLogCleaner implements Runnable {
 
 	private File logDirectory;
 	private File parsedDirectory;
 
-	private HashMap<String, Integer> txCountMap;
-	private HashMap<String, HashMap<String, Long>> connTimeMap;
-	private HashSet<String> ignoreSet;
+	private TimeRotatingHashMap<String, Integer> txCountMap;
+	private TimeRotatingHashMap<String, TimeRotatingHashMap<String, Long>> connTimeMap;
 
 	private static final long CHECK_INTERVAL_MS = 60 * 1000;
-	private static final int MAX_TX_ITEMS = 300;
+	private static final int MAX_TX_ITEMS = 30;
+
+	private String myHostName = "";
 
 	public static final File OUT_DIR = new File("parsed/");
+
+	public static final String MANAGER_USER = "pendgaft";
+	public static final String MANAGER_END_HOST = "taranis.eecs.utk.edu";
+	public static final String MANAGER_ID_FILE = "~/.ssh/id_rsa";
+	public static final String REMOTE_DIR = "/home/pendgaft/btc/logs/";
 
 	public SpyLogCleaner() throws FileNotFoundException {
 		this(Manager.LOG_DIR, SpyLogCleaner.OUT_DIR);
@@ -35,16 +44,21 @@ public class SpyLogCleaner implements Runnable {
 			this.parsedDirectory.mkdirs();
 		}
 
-		this.txCountMap = new HashMap<String, Integer>();
-		this.connTimeMap = new HashMap<String, HashMap<String, Long>>();
-		this.ignoreSet = new HashSet<String>();
+		this.txCountMap = new TimeRotatingHashMap<String, Integer>(20 * 60 * 1000);
+		this.connTimeMap = new TimeRotatingHashMap<String, TimeRotatingHashMap<String, Long>>(6 * 60 * 60 * 1000);
+
+		try {
+			this.myHostName = InetAddress.getLocalHost().getHostName();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 
 	private void handleFile(File specLogFile) {
 		try {
 			BufferedReader rawFile = new BufferedReader(new FileReader(specLogFile));
-			GZIPOutputStream outStream = new GZIPOutputStream(
-					new FileOutputStream(new File(this.parsedDirectory, specLogFile.getName() + ".gz")));
+			File endFile = new File(this.parsedDirectory, specLogFile.getName() + "-" + this.myHostName + ".gz");
+			GZIPOutputStream outStream = new GZIPOutputStream(new FileOutputStream(endFile));
 
 			String readStr = null;
 			while ((readStr = rawFile.readLine()) != null) {
@@ -54,32 +68,29 @@ public class SpyLogCleaner implements Runnable {
 					prunedStr = readStr;
 				} else if (tokens[1].equals("TX")) {
 					String txID = tokens[2];
-					if (this.ignoreSet.contains(txID)) {
+					int count = 0;
+					if (this.txCountMap.containsKey(txID)) {
+						count = this.txCountMap.get(txID);
+					}
+					if (count >= SpyLogCleaner.MAX_TX_ITEMS) {
 						prunedStr = null;
 					} else {
 						prunedStr = readStr;
-						if (!this.txCountMap.containsKey(txID)) {
-							this.txCountMap.put(txID, 0);
-						}
-						int newTxCount = this.txCountMap.get(txID) + 1;
-						if (newTxCount >= SpyLogCleaner.MAX_TX_ITEMS) {
-							this.txCountMap.remove(txID);
-							this.ignoreSet.add(txID);
-						} else {
-							this.txCountMap.put(txID, newTxCount);
-						}
+						count++;
+						this.txCountMap.put(txID, count);
 					}
 				} else if (tokens[1].equals("CONNPOINT")) {
 					String peerWeConnnectedTo = tokens[2];
 					String privatePeer = tokens[3];
 					Long ts = Long.parseLong(tokens[4]);
 					prunedStr = readStr;
-					
-					if(!this.connTimeMap.containsKey(peerWeConnnectedTo)){
-						this.connTimeMap.put(peerWeConnnectedTo, new HashMap<String, Long>());
+
+					if (!this.connTimeMap.containsKey(peerWeConnnectedTo)) {
+						this.connTimeMap.put(peerWeConnnectedTo,
+								new TimeRotatingHashMap<String, Long>(2 * 60 * 60 * 1000));
 					}
-					if(this.connTimeMap.get(peerWeConnnectedTo).containsKey(privatePeer)){
-						if(this.connTimeMap.get(peerWeConnnectedTo).get(privatePeer).equals(ts)){
+					if (this.connTimeMap.get(peerWeConnnectedTo).containsKey(privatePeer)) {
+						if (this.connTimeMap.get(peerWeConnnectedTo).get(privatePeer).equals(ts)) {
 							prunedStr = null;
 						}
 					}
@@ -97,14 +108,23 @@ public class SpyLogCleaner implements Runnable {
 			rawFile.close();
 			outStream.close();
 			specLogFile.delete();
-		} catch (IOException e) {
+
+			/*
+			 * Move file back to controller and clean local disk space
+			 */
+			MoveFile fileMover = MoveFile.pushLocalFile(SpyLogCleaner.MANAGER_USER, SpyLogCleaner.MANAGER_ID_FILE,
+					SpyLogCleaner.MANAGER_END_HOST, endFile.getAbsolutePath(), SpyLogCleaner.REMOTE_DIR);
+			fileMover.blockingExecute(60 * 1000);
+			endFile.delete();
+		} catch (IOException | InterruptedException e) {
 			e.printStackTrace();
 		}
 	}
 
 	public void run() {
-		try {
-			while (true) {
+
+		while (true) {
+			try {
 				/*
 				 * Wait before looking at the log dir
 				 */
@@ -121,9 +141,19 @@ public class SpyLogCleaner implements Runnable {
 						this.handleFile(new File(this.logDirectory, childFileNames[pos]));
 					}
 				}
+			} catch (Throwable e) {
+
+				try {
+					BufferedWriter errBuff = new BufferedWriter(
+							new FileWriter("errors/" + (System.currentTimeMillis() / 1000) + "-cleanerError"));
+					errBuff.write(e.getMessage());
+					errBuff.close();
+				} catch (IOException e2) {
+					e.printStackTrace();
+				}
+
+				System.out.println("Spy Log Cleaner exiting.");
 			}
-		} catch (InterruptedException e) {
-			System.out.println("Spy Log Cleaner exiting.");
 		}
 	}
 
