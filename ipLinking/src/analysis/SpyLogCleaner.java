@@ -21,6 +21,7 @@ public class SpyLogCleaner implements Runnable {
 	private static final int MAX_TX_ITEMS = 30;
 
 	private String myHostName = "";
+	private boolean plMon;
 
 	public static final File OUT_DIR = new File("parsed/");
 
@@ -29,11 +30,11 @@ public class SpyLogCleaner implements Runnable {
 	public static final String MANAGER_ID_FILE = "~/.ssh/id_rsa";
 	public static final String REMOTE_DIR = "/home/pendgaft/btc/logs/";
 
-	public SpyLogCleaner() throws FileNotFoundException {
-		this(Manager.LOG_DIR, SpyLogCleaner.OUT_DIR);
+	public SpyLogCleaner(boolean plMonInLoop) throws FileNotFoundException {
+		this(Manager.LOG_DIR, SpyLogCleaner.OUT_DIR, plMonInLoop);
 	}
 
-	public SpyLogCleaner(File logDir, File parseDir) throws FileNotFoundException {
+	public SpyLogCleaner(File logDir, File parseDir, boolean plMonInLoop) throws FileNotFoundException {
 		this.logDirectory = logDir;
 		if (!this.logDirectory.exists()) {
 			throw new FileNotFoundException("Log dir does not exist");
@@ -52,6 +53,7 @@ public class SpyLogCleaner implements Runnable {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		this.plMon = plMonInLoop;
 	}
 
 	private void handleFile(File specLogFile) {
@@ -112,10 +114,12 @@ public class SpyLogCleaner implements Runnable {
 			/*
 			 * Move file back to controller and clean local disk space
 			 */
-			MoveFile fileMover = MoveFile.pushLocalFile(SpyLogCleaner.MANAGER_USER, SpyLogCleaner.MANAGER_ID_FILE,
-					SpyLogCleaner.MANAGER_END_HOST, endFile.getAbsolutePath(), SpyLogCleaner.REMOTE_DIR);
-			fileMover.blockingExecute(60 * 1000);
-			endFile.delete();
+			if (this.plMon) {
+				MoveFile fileMover = MoveFile.pushLocalFile(SpyLogCleaner.MANAGER_USER, SpyLogCleaner.MANAGER_ID_FILE,
+						SpyLogCleaner.MANAGER_END_HOST, endFile.getAbsolutePath(), SpyLogCleaner.REMOTE_DIR);
+				fileMover.blockingExecute(60 * 1000);
+				endFile.delete();
+			}
 		} catch (IOException | InterruptedException e) {
 			e.printStackTrace();
 		}
@@ -158,7 +162,14 @@ public class SpyLogCleaner implements Runnable {
 	}
 
 	public static void main(String[] args) throws Exception {
-		SpyLogCleaner self = new SpyLogCleaner();
+		boolean plFlag = false;
+		for (String arg : args) {
+			if (arg.equalsIgnoreCase("--pl")) {
+				plFlag = true;
+				break;
+			}
+		}
+		SpyLogCleaner self = new SpyLogCleaner(plFlag);
 		Thread selfThread = new Thread(self);
 		selfThread.start();
 	}
