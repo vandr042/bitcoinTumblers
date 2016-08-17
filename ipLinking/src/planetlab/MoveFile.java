@@ -27,6 +27,12 @@ public class MoveFile implements Runnable {
 				idFile);
 		return resultantWorker;
 	}
+	
+	public static MoveFile fetchRemoteFile(String user, String idFile, String theHost, String theFile, String destDir){
+		MoveFile resultantWorker = new MoveFile(user + "@" + theHost + ":" + theFile, destDir,
+				idFile);
+		return resultantWorker;
+	}
 
 	public static MoveFile pushLocalFile(String user, String idFile, String theHost, String localFile,
 			String remoteDir) {
