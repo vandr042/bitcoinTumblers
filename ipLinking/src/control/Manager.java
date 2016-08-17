@@ -2,6 +2,7 @@ package control;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -74,6 +75,8 @@ public class Manager implements Runnable, AddressUser {
 	public static final int DEBUG_LOG_LEVEL = 3;
 	public static final int IGNORE_LOG_LEVEL = Integer.MAX_VALUE;
 
+	private static int TX_INV_LOG_LEVEL = Manager.CRIT_LOG_LEVEL;
+
 	private static final String PL_MAN_USER = "pendgaft";
 	private static final String PL_MAN_ID = "~/.ssh/id_rsa";
 
@@ -82,6 +85,8 @@ public class Manager implements Runnable, AddressUser {
 	 */
 	private static final long INT_WINDOW_SEC = 60 * 60 * 4;
 	private static final int UNSOL_SIZE = 10;
+
+	private static final int VP_MAX_SIZE = 4000;
 
 	private static final boolean BULKY_STATUS = false;
 	private static final boolean HUMAN_READABLE_DATE = false;
@@ -191,14 +196,11 @@ public class Manager implements Runnable, AddressUser {
 			}
 			startingList = Arrays.asList(dnsPeers);
 		} else {
-			startingList = new LinkedList<PeerAddress>();
-			for (String tStr : recoverySet) {
-				String[] tokens = tStr.split(":");
-				try {
-					startingList.add(new PeerAddress(InetAddress.getByName(tokens[0]), Integer.parseInt(tokens[1])));
-				} catch (Exception e) {
-					this.logException(e);
-				}
+			startingList = null;
+			try {
+				startingList = Manager.buildPeerListFromStrings(recoverySet);
+			} catch (Exception e) {
+				this.logException(e);
 			}
 		}
 
@@ -278,7 +280,7 @@ public class Manager implements Runnable, AddressUser {
 		this.logEvent("INVRCV," + arg0.size() + ",from:" + arg1.getAddress().toString(), Manager.DEBUG_LOG_LEVEL);
 		for (InventoryItem tItem : arg0) {
 			this.logEvent("TX," + tItem.hash.toString() + ",from," + arg1.getAddress().toString() + "," + now,
-					Manager.CRIT_LOG_LEVEL);
+					Manager.TX_INV_LOG_LEVEL);
 		}
 	}
 
@@ -337,8 +339,10 @@ public class Manager implements Runnable, AddressUser {
 			}
 			introduce = theRecord.shouldIntroduce(incAddr.getTS());
 		} else {
-			introduce = true;
-			theRecord.setAsIntroduced();
+			introduce = !theRecord.hasBeenIntroduced();
+			if (introduce) {
+				theRecord.setAsIntroduced();
+			}
 		}
 
 		if (introduce) {
@@ -476,14 +480,45 @@ public class Manager implements Runnable, AddressUser {
 		}
 	}
 
-	public void makeRecoveryFile(String file) {
+	public void managedTimedPeerMaintence() {
+		try {
+			if (this.isVantangePoint) {
+				Set<String> respSet = Manager.buildRespSet();
+				List<PeerAddress> respNodes = Manager.buildPeerListFromStrings(respSet);
+				for (PeerAddress tPeer : respNodes) {
+					this.handleAddressNotificiation(new SanatizedRecord(tPeer), null);
+				}
+
+				/*
+				 * Blue pill if we have too many nodes to manage as a VP (yay
+				 * limited FDs)
+				 */
+				boolean killSelf = false;
+				synchronized (this.records) {
+					killSelf = (this.records.size() > Manager.VP_MAX_SIZE);
+				}
+				if (killSelf) {
+					this.bluePill();
+				}
+			} else {
+				this.makeRecoveryFile();
+			}
+		} catch (Exception e) {
+			this.logException(e);
+		}
+	}
+
+	private void makeRecoveryFile() {
 		/*
 		 * Vantage points are not allowed to update their recovery file
 		 */
 		if (this.isVantangePoint) {
-			return;
+			RuntimeException e = new RuntimeException("Vantage points should NOT make recovery files!");
+			this.logException(e);
+			throw e;
 		}
 
+		String tempTS = Long.toString((System.currentTimeMillis() / 1000));
 		File baseDir = new File(Manager.RECOVER_DIR);
 
 		/*
@@ -496,7 +531,7 @@ public class Manager implements Runnable, AddressUser {
 		/*
 		 * Actually dump our current connection state
 		 */
-		File currentRecFile = new File(baseDir, file + "-recovery-" + this.myHostName);
+		File currentRecFile = new File(baseDir, tempTS + "-recovery-" + this.myHostName);
 		try {
 			BufferedWriter outBuff = new BufferedWriter(new FileWriter(currentRecFile));
 			HashMap<SanatizedRecord, Peer> copyOfPeerMap = this.getCopyOfPeerMap();
@@ -521,7 +556,7 @@ public class Manager implements Runnable, AddressUser {
 		 * If we have a Planetlab Manager then phone home, giving the recovery
 		 * set
 		 */
-		//TODO clean up this directory issue
+		// TODO clean up this directory issue
 		if (this.havePlManager()) {
 			MoveFile fileMover = MoveFile.pushLocalFile(Manager.PL_MAN_USER, Manager.PL_MAN_ID, this.plManHost,
 					currentRecFile.getAbsolutePath(), "/home/pendgaft/btc/recovery");
@@ -614,6 +649,16 @@ public class Manager implements Runnable, AddressUser {
 		}
 	}
 
+	public static List<PeerAddress> buildPeerListFromStrings(Set<String> addrStrings)
+			throws NumberFormatException, UnknownHostException {
+		List<PeerAddress> theList = new LinkedList<PeerAddress>();
+		for (String tStr : addrStrings) {
+			String[] tokens = tStr.split(":");
+			theList.add(new PeerAddress(InetAddress.getByName(tokens[0]), Integer.parseInt(tokens[1])));
+		}
+		return theList;
+	}
+
 	public static Set<String> buildRecoverySet() throws IOException {
 		File baseDir = new File(Manager.RECOVER_DIR);
 		Set<String> recoverySet = new HashSet<String>();
@@ -633,12 +678,56 @@ public class Manager implements Runnable, AddressUser {
 		return recoverySet;
 	}
 
+	private static Set<String> buildRespSet() throws IOException {
+		/*
+		 * Find the most up to date responsibility file based on time stamp
+		 */
+		File[] possFiles = (new File(Manager.RECOVER_DIR)).listFiles();
+		File currentOldest = null;
+		long oldestTS = -1;
+		for (File tFile : possFiles) {
+			if (tFile.getName().contains("recovery")) {
+				long ts = Long.parseLong(tFile.getName().split("-")[0]);
+				if (ts > oldestTS) {
+					oldestTS = ts;
+					currentOldest = tFile;
+				}
+			}
+		}
+
+		/*
+		 * clean the old responsibility files
+		 */
+		for (File tFile : possFiles) {
+			if (!tFile.equals(currentOldest)) {
+				tFile.delete();
+			}
+		}
+
+		/*
+		 * load the actual recovery set
+		 */
+		Set<String> loadedSet = new HashSet<String>();
+		BufferedReader inBuff = new BufferedReader(new FileReader(currentOldest));
+		String readStr = null;
+		while ((readStr = inBuff.readLine()) != null) {
+			if (readStr.contains(":")) {
+				loadedSet.add(readStr.trim());
+			}
+		}
+		inBuff.close();
+
+		return loadedSet;
+	}
+
 	public static void main(String[] args) throws Exception {
 		ArgumentParser argParse = ArgumentParsers.newArgumentParser("Manager");
 		argParse.addArgument("--recovery").help("Triggers recover mode start").required(false)
 				.action(Arguments.storeTrue());
 		argParse.addArgument("--vantagepoint").help("Turns on vantage point behavior, disabling peer searches")
 				.required(false).action(Arguments.storeTrue());
+		argParse.addArgument("--notxLog").help("Turns off transaction INV logging").required(false)
+				.action(Arguments.storeTrue());
 		argParse.addArgument("--plMan").help("Informs the node what host is running a planet lab manager")
 				.required(false).type(String.class);
 		/*
@@ -656,8 +745,17 @@ public class Manager implements Runnable, AddressUser {
 		boolean amIVantage = ns.getBoolean("vantagepoint");
 		String plMan = ns.getString("plMan");
 
+		if (ns.getBoolean("notxLog")) {
+			Manager.TX_INV_LOG_LEVEL = Manager.IGNORE_LOG_LEVEL;
+		}
+
 		if (ns.getBoolean("recovery")) {
-			Set<String> recoveryPeerSet = Manager.buildRecoverySet();
+			Set<String> recoveryPeerSet = null;
+			if (amIVantage) {
+				recoveryPeerSet = Manager.buildRespSet();
+			} else {
+				recoveryPeerSet = Manager.buildRecoverySet();
+			}
 			self = new Manager(recoveryPeerSet, amIVantage, plMan);
 		} else {
 			self = new Manager(null, amIVantage, plMan);
@@ -671,7 +769,7 @@ public class Manager implements Runnable, AddressUser {
 			Thread.sleep(300 * 1000);
 			String tempTS = Long.toString((System.currentTimeMillis() / 1000));
 
-			self.makeRecoveryFile(tempTS);
+			self.managedTimedPeerMaintence();
 
 			if (Manager.BULKY_STATUS && System.currentTimeMillis() > nextLargeLog) {
 				nextLargeLog = System.currentTimeMillis() + 1800 * 1000;
