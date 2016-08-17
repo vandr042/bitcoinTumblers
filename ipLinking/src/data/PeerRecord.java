@@ -109,6 +109,14 @@ public class PeerRecord {
 		return response;
 	}
 	
+	public boolean hasBeenIntroduced(){
+		boolean response = false;
+		synchronized(this){
+			response = this.introducedToConnTester;
+		}
+		return response;
+	}
+	
 	public void setAsIntroduced(){
 		synchronized(this){
 			this.introducedToConnTester = true;
