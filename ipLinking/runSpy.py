@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 import os
 import shutil
 import subprocess
@@ -12,19 +13,19 @@ BASE_SOURCE_FILE = "src/control/Manager.java"
 BASE_CLASS = "control.Manager"
 JAR_STR = JARPATH + "/commonsLogging.jar:" + JARPATH + "/mjsBCJ.jar:" + JARPATH + "/slf4j.jar:" + JARPATH + "/argparse4j-0.5.0.jar"
 
-def main():
+def main(plMode):
     compile()
-    runPrune()
+    runPrune(plMode)
     if os.listdir("recovery"):
-        runProc = run(True)
+        runProc = run(True, plMode)
     else:
-        runProc = run(False)
+        runProc = run(False, plMode)
     while True:
         runProc.wait()
         print("PROCESS FAILED")
-        time.sleep(30)
+        time.sleep(10)
         print("PROCESS RESTARTED")
-        runProc = run(True)
+        runProc = run(True, plMode)
     
 def compile():
     print("Starting compile")
@@ -37,16 +38,20 @@ def compile():
     compProc.wait()
     print("done compiling")
 
-def runPrune():
+def runPrune(plMode):
     procArgs = ["java", "-Xmx6G", "-cp", JAR_STR + ":" + BUILD_DEST, "-d64", "analysis.SpyLogCleaner"]
+    if plMode:
+        procArgs = procArgs + ["--pl"]
     subprocess.Popen(procArgs)
     
-def run(restart):
-    procArgs = ["java", "-XX:+UseG1GC","-cp", JAR_STR + ":" + BUILD_DEST, "-Xmx7G", "-d64", BASE_CLASS, "--plMan", "taranis.eecs.utk.edu"]
+def run(restart, plMode):
+    procArgs = ["java", "-XX:+UseG1GC","-cp", JAR_STR + ":" + BUILD_DEST, "-Xmx7G", "-d64", BASE_CLASS]
+    if plMode:
+        procArgs = procArgs + ["--plMan"]
     if restart:
         procArgs = procArgs + ["--recovery"]
     runProc = subprocess.Popen(procArgs)
     return runProc
 
 if __name__ == "__main__":
-    main()
+    main("--pl" in sys.argv)
