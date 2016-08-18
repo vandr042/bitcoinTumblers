@@ -32,6 +32,7 @@ import data.PeerRecord;
 import data.SanatizedRecord;
 import logging.*;
 import planetlab.MoveFile;
+import planetlab.PlanetlabConfig;
 
 public class Manager implements Runnable, AddressUser {
 
@@ -39,7 +40,7 @@ public class Manager implements Runnable, AddressUser {
 	private Context bcjContext;
 	private NetworkParameters params;
 	private boolean isVantangePoint;
-	private String plManHost;
+	private boolean plManEnabled;
 	private String myHostName;
 
 	private NioClientManager[] nioManagers;
@@ -77,9 +78,6 @@ public class Manager implements Runnable, AddressUser {
 
 	private static int TX_INV_LOG_LEVEL = Manager.CRIT_LOG_LEVEL;
 
-	private static final String PL_MAN_USER = "pendgaft";
-	private static final String PL_MAN_ID = "~/.ssh/id_rsa";
-
 	/*
 	 * Int window is 1 hr 50 minutes (tighten?)
 	 */
@@ -92,11 +90,11 @@ public class Manager implements Runnable, AddressUser {
 	private static final boolean HUMAN_READABLE_DATE = false;
 	private static final boolean SUPPRESS_EXCESS_STATE = true;
 
-	public Manager(Set<String> recoverySet, String plManager) throws IOException {
+	public Manager(Set<String> recoverySet, boolean plManager) throws IOException {
 		this(recoverySet, false, plManager);
 	}
 
-	public Manager(Set<String> recoverySet, boolean vantagePoint, String plManager) throws IOException {
+	public Manager(Set<String> recoverySet, boolean vantagePoint, boolean plManager) throws IOException {
 		/*
 		 * Build the params and context objects which are needed by other data
 		 * structures.
@@ -106,7 +104,7 @@ public class Manager implements Runnable, AddressUser {
 		this.bcjContext = new Context(params);
 		Peer.lobotomizeMe();
 		this.isVantangePoint = vantagePoint;
-		this.plManHost = plManager;
+		this.plManEnabled = plManager;
 		this.myHostName = InetAddress.getLocalHost().getHostName();
 
 		/*
@@ -558,8 +556,8 @@ public class Manager implements Runnable, AddressUser {
 		 */
 		// TODO clean up this directory issue
 		if (this.havePlManager()) {
-			MoveFile fileMover = MoveFile.pushLocalFile(Manager.PL_MAN_USER, Manager.PL_MAN_ID, this.plManHost,
-					currentRecFile.getAbsolutePath(), "/home/pendgaft/btc/recovery");
+			MoveFile fileMover = MoveFile.pushLocalFile(PlanetlabConfig.MON_USER, PlanetlabConfig.MON_KEY,
+					PlanetlabConfig.MON_HOST, currentRecFile.getAbsolutePath(), "/home/btc/recovery");
 			try {
 				fileMover.blockingExecute(10000);
 			} catch (InterruptedException e) {
@@ -579,7 +577,7 @@ public class Manager implements Runnable, AddressUser {
 	}
 
 	private boolean havePlManager() {
-		return this.plManHost != null;
+		return this.plManEnabled;
 	}
 
 	@Override
@@ -728,8 +726,8 @@ public class Manager implements Runnable, AddressUser {
 				.required(false).action(Arguments.storeTrue());
 		argParse.addArgument("--notxLog").help("Turns off transaction INV logging").required(false)
 				.action(Arguments.storeTrue());
-		argParse.addArgument("--plMan").help("Informs the node what host is running a planet lab manager")
-				.required(false).type(String.class);
+		argParse.addArgument("--plMan").help("Informs the node that a host is running a planet lab manager")
+				.required(false).action(Arguments.storeTrue());
 		/*
 		 * Actually parse
 		 */
@@ -743,7 +741,6 @@ public class Manager implements Runnable, AddressUser {
 
 		Manager self = null;
 		boolean amIVantage = ns.getBoolean("vantagepoint");
-		String plMan = ns.getString("plMan");
 
 		if (ns.getBoolean("notxLog")) {
 			Manager.TX_INV_LOG_LEVEL = Manager.IGNORE_LOG_LEVEL;
@@ -756,9 +753,9 @@ public class Manager implements Runnable, AddressUser {
 			} else {
 				recoveryPeerSet = Manager.buildRecoverySet();
 			}
-			self = new Manager(recoveryPeerSet, amIVantage, plMan);
+			self = new Manager(recoveryPeerSet, amIVantage, ns.getBoolean("plMan"));
 		} else {
-			self = new Manager(null, amIVantage, plMan);
+			self = new Manager(null, amIVantage, ns.getBoolean("plMan"));
 		}
 
 		Thread selfThread = new Thread(self, "Status Reporting Thread");
@@ -766,7 +763,11 @@ public class Manager implements Runnable, AddressUser {
 
 		long nextLargeLog = System.currentTimeMillis() + 1800 * 1000;
 		while (true) {
-			Thread.sleep(300 * 1000);
+			if (amIVantage) {
+				Thread.sleep(30 * 1000);
+			} else {
+				Thread.sleep(5 * 60 * 1000);
+			}
 			String tempTS = Long.toString((System.currentTimeMillis() / 1000));
 
 			self.managedTimedPeerMaintence();

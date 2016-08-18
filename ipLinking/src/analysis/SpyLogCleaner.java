@@ -8,6 +8,7 @@ import java.util.zip.*;
 import control.Manager;
 import data.TimeRotatingHashMap;
 import planetlab.MoveFile;
+import planetlab.PlanetlabConfig;
 
 public class SpyLogCleaner implements Runnable {
 
@@ -24,11 +25,7 @@ public class SpyLogCleaner implements Runnable {
 	private boolean plMon;
 
 	public static final File OUT_DIR = new File("parsed/");
-
-	public static final String MANAGER_USER = "pendgaft";
-	public static final String MANAGER_END_HOST = "taranis.eecs.utk.edu";
-	public static final String MANAGER_ID_FILE = "~/.ssh/id_rsa";
-	public static final String REMOTE_DIR = "/home/pendgaft/btc/logs/";
+	public static final String REMOTE_DIR = "/home/btc/logs/";
 
 	public SpyLogCleaner(boolean plMonInLoop) throws FileNotFoundException {
 		this(Manager.LOG_DIR, SpyLogCleaner.OUT_DIR, plMonInLoop);
@@ -115,8 +112,8 @@ public class SpyLogCleaner implements Runnable {
 			 * Move file back to controller and clean local disk space
 			 */
 			if (this.plMon) {
-				MoveFile fileMover = MoveFile.pushLocalFile(SpyLogCleaner.MANAGER_USER, SpyLogCleaner.MANAGER_ID_FILE,
-						SpyLogCleaner.MANAGER_END_HOST, endFile.getAbsolutePath(), SpyLogCleaner.REMOTE_DIR);
+				MoveFile fileMover = MoveFile.pushLocalFile(PlanetlabConfig.MON_USER, PlanetlabConfig.MON_KEY,
+						PlanetlabConfig.MON_HOST, endFile.getAbsolutePath(), SpyLogCleaner.REMOTE_DIR);
 				fileMover.blockingExecute(60 * 1000);
 				endFile.delete();
 			}
