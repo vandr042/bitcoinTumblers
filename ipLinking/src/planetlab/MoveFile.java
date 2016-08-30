@@ -1,6 +1,7 @@
 package planetlab;
 
 import java.io.*;
+import java.net.InetAddress;
 import java.util.concurrent.TimeUnit;
 
 public class MoveFile implements Runnable {
@@ -8,6 +9,8 @@ public class MoveFile implements Runnable {
 	private String fromFile;
 	private String toFile;
 	private String idFile;
+
+	private boolean local;
 
 	private static final long TIMEOUT = 10;
 	private static final TimeUnit TIMEOUT_UNITS = TimeUnit.SECONDS;
@@ -23,48 +26,72 @@ public class MoveFile implements Runnable {
 		/*
 		 * Build the worker
 		 */
-		MoveFile resultantWorker = new MoveFile(user + "@" + theHost + ":" + theFile, localDir.getAbsolutePath(),
-				idFile);
+		MoveFile resultantWorker = null;
+		if (MoveFile.isLocal(theHost)) {
+			resultantWorker = new MoveFile(theFile, localDir.getAbsolutePath(), null, true);
+		} else {
+			resultantWorker = new MoveFile(user + "@" + theHost + ":" + theFile, localDir.getAbsolutePath(), idFile);
+		}
 		return resultantWorker;
 	}
-	
-	public static MoveFile fetchRemoteFile(String user, String idFile, String theHost, String theFile, String destDir){
-		MoveFile resultantWorker = new MoveFile(user + "@" + theHost + ":" + theFile, destDir,
-				idFile);
+
+	public static MoveFile fetchRemoteFile(String user, String idFile, String theHost, String theFile, String destDir) {
+		MoveFile resultantWorker = null;
+		if (MoveFile.isLocal(theHost)) {
+			resultantWorker = new MoveFile(theFile, destDir, null, true);
+		} else {
+			resultantWorker = new MoveFile(user + "@" + theHost + ":" + theFile, destDir, idFile);
+		}
 		return resultantWorker;
 	}
 
 	public static MoveFile pushLocalFile(String user, String idFile, String theHost, String localFile,
 			String remoteDir) {
-		MoveFile resultantWorker = new MoveFile(localFile, user + "@" + theHost + ":" + remoteDir, idFile);
+		MoveFile resultantWorker = null;
+		if (MoveFile.isLocal(theHost)) {
+			resultantWorker = new MoveFile(localFile, remoteDir, null, true);
+		} else {
+			resultantWorker = new MoveFile(localFile, user + "@" + theHost + ":" + remoteDir, idFile);
+		}
 		return resultantWorker;
 	}
 
 	public MoveFile(String fromPath, String toPath, String idFile) {
+		this(fromPath, toPath, idFile, false);
+	}
+
+	public MoveFile(String fromPath, String toPath, String idFile, boolean local) {
 		this.fromFile = fromPath;
 		this.toFile = toPath;
 		this.idFile = idFile;
+		this.local = local;
 	}
 
 	public void blockingExecute() throws InterruptedException {
 		this.blockingExecute(0);
 	}
-	
-	public void blockingExecute(long msTimeOut) throws InterruptedException{
+
+	public void blockingExecute(long msTimeOut) throws InterruptedException {
 		Thread selfThread = new Thread(this);
 		selfThread.start();
-		selfThread.join(msTimeOut);		
+		selfThread.join(msTimeOut);
 	}
 
 	// TODO think deeply about how we want to handle errors
 	public void run() {
-		String scpCmd = "scp -i " + this.idFile + " " + this.fromFile + " " + this.toFile;
+		String cmd = null;
+		if (this.local) {
+			cmd = "cp " + this.fromFile + " " + this.toFile;
+		} else {
+
+			cmd = "scp -i " + this.idFile + " " + this.fromFile + " " + this.toFile;
+		}
 		Runtime myRT = Runtime.getRuntime();
 
 		boolean finished = false;
 		try {
-			Process mySCPProc = myRT.exec(scpCmd);
-			finished = mySCPProc.waitFor(MoveFile.TIMEOUT, MoveFile.TIMEOUT_UNITS);
+			Process childProc = myRT.exec(cmd);
+			finished = childProc.waitFor(MoveFile.TIMEOUT, MoveFile.TIMEOUT_UNITS);
 		} catch (IOException e) {
 			e.printStackTrace();
 		} catch (InterruptedException e) {
@@ -77,6 +104,7 @@ public class MoveFile implements Runnable {
 		} else {
 			System.out.println("didn't finish");
 		}
+
 	}
 
 	public static void main(String args[]) {
@@ -85,5 +113,16 @@ public class MoveFile implements Runnable {
 		MoveFile tSelf = MoveFile.pushLocalFile("pendgaft", "~/.ssh/id_rsa", "waterhouse-umh.cs.umn.edu", "foo", "~/");
 		Thread tThread = new Thread(tSelf);
 		tThread.start();
+	}
+
+	public static boolean isLocal(String host) {
+		try {
+			String hostName = InetAddress.getLocalHost().getHostName();
+			return hostName.equals(host) || hostName.split(".")[0].equals(host);
+		} catch (Exception e) {
+			e.printStackTrace();
+			return false;
+		}
+
 	}
 }
