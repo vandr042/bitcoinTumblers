@@ -694,6 +694,13 @@ public class Manager implements Runnable, AddressUser {
 		}
 
 		/*
+		 * If we're waiting on a responsibility set, just return an empty one
+		 */
+		if (currentOldest == null) {
+			return new HashSet<String>();
+		}
+
+		/*
 		 * clean the old responsibility files
 		 */
 		for (File tFile : possFiles) {
@@ -746,7 +753,7 @@ public class Manager implements Runnable, AddressUser {
 			Manager.TX_INV_LOG_LEVEL = Manager.IGNORE_LOG_LEVEL;
 		}
 
-		if (ns.getBoolean("recovery")) {
+		if (ns.getBoolean("recovery") || amIVantage) {
 			Set<String> recoveryPeerSet = null;
 			if (amIVantage) {
 				recoveryPeerSet = Manager.buildRespSet();

@@ -13,7 +13,7 @@ BASE_SOURCE_FILE = "src/control/Manager.java"
 BASE_CLASS = "control.Manager"
 JAR_STR = JARPATH + "/commonsLogging.jar:" + JARPATH + "/mjsBCJ.jar:" + JARPATH + "/slf4j.jar:" + JARPATH + "/argparse4j-0.5.0.jar"
 
-JAVA_BIN = "../jdk/bin/"
+JAVA_BIN = "../jdk1.8.0_101/bin/"
 JAVA_EXE = JAVA_BIN + "java"
 JAVAC_EXE = JAVA_BIN + "javac"
 

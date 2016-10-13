@@ -12,8 +12,8 @@ public class MoveFile implements Runnable {
 
 	private boolean local;
 
-	private static final long TIMEOUT = 10;
-	private static final TimeUnit TIMEOUT_UNITS = TimeUnit.SECONDS;
+	private long timeout = 10;
+	private static final TimeUnit TIMEOUT_UNITS = TimeUnit.MILLISECONDS;
 	private static File DUMP_DIR = new File("fetch/");
 
 	public static MoveFile fetchRemoteFile(String user, String idFile, String theHost, String theFile) {
@@ -72,6 +72,9 @@ public class MoveFile implements Runnable {
 	}
 
 	public void blockingExecute(long msTimeOut) throws InterruptedException {
+		if (msTimeOut != 0) {
+			this.timeout = msTimeOut;
+		}
 		Thread selfThread = new Thread(this);
 		selfThread.start();
 		selfThread.join(msTimeOut);
@@ -89,20 +92,22 @@ public class MoveFile implements Runnable {
 		Runtime myRT = Runtime.getRuntime();
 
 		boolean finished = false;
+		long startTime = System.currentTimeMillis();
 		try {
 			Process childProc = myRT.exec(cmd);
-			finished = childProc.waitFor(MoveFile.TIMEOUT, MoveFile.TIMEOUT_UNITS);
+			finished = childProc.waitFor(this.timeout, MoveFile.TIMEOUT_UNITS);
 		} catch (IOException e) {
 			e.printStackTrace();
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
+		long totalTime = (System.currentTimeMillis() - startTime) / 1000;
 
 		// TODO enh logging
 		if (finished) {
-			System.out.println("finished");
+			System.out.println("finished " + this.toFile + " " + this.fromFile + " in " + totalTime);
 		} else {
-			System.out.println("didn't finish");
+			System.out.println("didn't finish " + this.toFile + " " + this.fromFile);
 		}
 
 	}
@@ -110,15 +115,14 @@ public class MoveFile implements Runnable {
 	public static void main(String args[]) {
 		// MoveFile tSelf = MoveFile.fetchRemoteFile("pendgaft",
 		// "~/.ssh/id_rsa", "waterhouse-umh.cs.umn.edu", "~/test");
-		MoveFile tSelf = MoveFile.pushLocalFile("pendgaft", "~/.ssh/id_rsa", "waterhouse-umh.cs.umn.edu", "foo", "~/");
-		Thread tThread = new Thread(tSelf);
-		tThread.start();
+		System.out.println(MoveFile.isLocal("waterhosue.cs.umn.edu"));
 	}
 
 	public static boolean isLocal(String host) {
 		try {
 			String hostName = InetAddress.getLocalHost().getHostName();
-			return hostName.equals(host) || hostName.split(".")[0].equals(host);
+			return hostName.equals(host) || hostName.split("\\.")[0].equals(host)
+					|| hostName.equals(host.split("\\.")[0]);
 		} catch (Exception e) {
 			e.printStackTrace();
 			return false;
